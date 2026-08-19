@@ -1,0 +1,2270 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>CSS &amp; Browser Rendering Demo — Good vs Bad</title>
+    <meta name="description" content="An interactive, self-contained teaching tool comparing good and bad CSS &amp; browser rendering practices: layout, responsiveness, animation, DOM manipulation and caching." />
+
+    <!-- ============================================================
+         ALLOWED EXTERNAL DEPS: Google Fonts + Font Awesome (icons only).
+         Everything else (CSS + JS) is inline and self-contained.
+    ============================================================ -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" />
+
+    <style>
+        /* ================================================================
+           THEME — CSS custom properties (design tokens).
+           One set of tokens, two themes. Everything downstream consumes
+           var(--...) so a theme switch is a single attribute flip.
+        ================================================================ */
+        :root {
+            --font-sans: 'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif;
+            --font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+
+            /* Surfaces */
+            --color-bg: #f4f6fb;
+            --color-surface: #ffffff;
+            --color-surface-2: #eef1f7;
+            --color-border: #dde3ee;
+            --color-text: #0f172a;
+            --color-muted: #5b6b81;
+
+            /* Semantics: blue = GOOD, red/orange = BAD */
+            --color-good: #2563eb;
+            --color-good-strong: #1d4ed8;
+            --color-good-soft: rgba(37, 99, 235, 0.12);
+            --color-bad: #dc2626;
+            --color-bad-strong: #b91c1c;
+            --color-bad-soft: rgba(220, 38, 38, 0.10);
+            --color-warn: #d97706;
+            --color-warn-soft: rgba(217, 119, 6, 0.14);
+
+            --shadow-sm: 0 1px 2px rgba(15, 23, 42, .06), 0 1px 3px rgba(15, 23, 42, .08);
+            --shadow-md: 0 6px 18px rgba(15, 23, 42, .10);
+            --shadow-lg: 0 12px 32px rgba(15, 23, 42, .16);
+
+            --radius: 14px;
+            --radius-sm: 8px;
+
+            /* Token colors for the code highlighter (theme-aware) */
+            --tok-comment: #6b7280;
+            --tok-selector: #2563eb;
+            --tok-property: #7c3aed;
+            --tok-value: #047857;
+            --tok-string: #b45309;
+            --tok-keyword: #dc2626;
+            --tok-punct: #94a3b8;
+        }
+
+        /* Dark theme overrides the SAME token names — components never
+           know which theme is active. This is the whole point of
+           CSS custom properties: theme switching costs zero reflows. */
+        [data-theme="dark"] {
+            --color-bg: #0b1120;
+            --color-surface: #101a30;
+            --color-surface-2: #17233c;
+            --color-border: #24314d;
+            --color-text: #e6edf7;
+            --color-muted: #8fa1bd;
+            --color-good: #60a5fa;
+            --color-good-strong: #3b82f6;
+            --color-good-soft: rgba(96, 165, 250, .14);
+            --color-bad: #f87171;
+            --color-bad-strong: #fca5a5;
+            --color-bad-soft: rgba(248, 113, 113, .12);
+            --color-warn: #fbbf24;
+            --color-warn-soft: rgba(251, 191, 36, .14);
+            --shadow-sm: 0 1px 2px rgba(0, 0, 0, .4);
+            --shadow-md: 0 6px 18px rgba(0, 0, 0, .45);
+            --shadow-lg: 0 12px 32px rgba(0, 0, 0, .55);
+            --tok-comment: #64748b;
+            --tok-selector: #60a5fa;
+            --tok-property: #c4b5fd;
+            --tok-value: #6ee7b7;
+            --tok-string: #fbbf24;
+            --tok-keyword: #fca5a5;
+            --tok-punct: #52627c;
+        }
+
+        /* ================================================================
+           RESET & BASE
+        ================================================================ */
+        *,
+        *::before,
+        *::after {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        html {
+            scroll-behavior: smooth;
+            scroll-padding-top: 24px;
+        }
+
+        body {
+            font-family: var(--font-sans);
+            font-size: clamp(0.95rem, 0.9rem + 0.25vw, 1.05rem); /* responsive body type */
+            line-height: 1.6;
+            background: var(--color-bg);
+            color: var(--color-text);
+            transition: background-color .3s ease, color .3s ease;
+            -webkit-font-smoothing: antialiased;
+        }
+
+        /* Semantic text helpers */
+        .text-good { color: var(--color-good); font-weight: 800; }
+        .text-bad  { color: var(--color-bad);  font-weight: 800; }
+
+        /* Focus visibility — keyboard a11y, never outline:none */
+        :focus-visible {
+            outline: 3px solid var(--color-good);
+            outline-offset: 2px;
+            border-radius: 4px;
+        }
+
+        .visually-hidden {
+            position: absolute !important;
+            width: 1px; height: 1px;
+            margin: -1px; padding: 0;
+            overflow: hidden;
+            clip: rect(0 0 0 0);
+            white-space: nowrap;
+            border: 0;
+        }
+
+        /* Skip link for screen readers / keyboard users */
+        .skip-link {
+            position: absolute;
+            top: -60px; left: 16px;
+            background: var(--color-good);
+            color: #fff;
+            padding: 10px 16px;
+            border-radius: 0 0 8px 8px;
+            z-index: 1000;
+            transition: top .2s ease;
+        }
+        .skip-link:focus { top: 0; }
+
+        /* ================================================================
+           LAYOUT SHELL
+        ================================================================ */
+        .shell {
+            max-width: 1180px;
+            margin-inline: auto;
+            padding-inline: clamp(12px, 3vw, 28px);
+        }
+
+        /* ================================================================
+           HEADER
+        ================================================================ */
+        .page-header {
+            display: flex;
+            flex-direction: column;      /* mobile-first: stack */
+            gap: 16px;
+            align-items: flex-start;
+            padding-block: 28px 12px;
+        }
+        @media (min-width: 640px) {     /* then enhance */
+            .page-header { flex-direction: row; align-items: center; justify-content: space-between; }
+        }
+
+        .page-header__brand {
+            display: flex;
+            gap: 14px;
+            align-items: flex-start;
+        }
+
+        .page-header__logo {
+            display: grid;
+            place-items: center;
+            width: 46px; height: 46px;
+            border-radius: 12px;
+            background: linear-gradient(135deg, var(--color-good), var(--color-good-strong));
+            color: #fff;
+            font-size: 1.25rem;
+            flex: none;
+            box-shadow: var(--shadow-sm);
+        }
+
+        /* clamp(): type scales fluidly with the viewport —
+           1.5rem at small screens, up to 2.6rem on wide ones. */
+        .page-header__title {
+            font-size: clamp(1.5rem, 1.1rem + 2.2vw, 2.6rem);
+            font-weight: 800;
+            line-height: 1.15;
+            letter-spacing: -0.02em;
+        }
+
+        .page-header__subtitle {
+            color: var(--color-muted);
+            margin-top: 4px;
+            max-width: 60ch;
+        }
+
+        .page-header__actions {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+
+        /* Theme toggle: aria-pressed drives which icon shows */
+        .theme-toggle {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 10px 16px;
+            border-radius: 999px;
+            border: 1px solid var(--color-border);
+            background: var(--color-surface);
+            color: var(--color-text);
+            font: inherit;
+            font-weight: 600;
+            cursor: pointer;
+            box-shadow: var(--shadow-sm);
+            transition: transform .15s ease, box-shadow .2s ease;
+        }
+        .theme-toggle:hover { transform: translateY(-1px); box-shadow: var(--shadow-md); }
+        .theme-toggle .fa-sun  { display: none; }
+        .theme-toggle .fa-moon { display: inline-block; }
+        .theme-toggle[aria-pressed="true"] .fa-sun  { display: inline-block; }
+        .theme-toggle[aria-pressed="true"] .fa-moon { display: none; }
+
+        /* ================================================================
+           TABLE OF CONTENTS
+        ================================================================ */
+        .toc {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            padding-block: 14px 6px;
+            border-bottom: 1px solid var(--color-border);
+            margin-bottom: 28px;
+        }
+        .toc__chip {
+            text-decoration: none;
+            color: var(--color-muted);
+            font-size: .82rem;
+            font-weight: 600;
+            padding: 6px 14px;
+            border-radius: 999px;
+            border: 1px solid var(--color-border);
+            background: var(--color-surface);
+            transition: color .15s ease, border-color .15s ease, transform .15s ease;
+        }
+        .toc__chip:hover {
+            color: var(--color-text);
+            border-color: var(--color-good);
+            transform: translateY(-1px);
+        }
+
+        /* ================================================================
+           SECTIONS — each demo is one section.
+           content-visibility: auto — off-screen sections skip rendering
+           work entirely (huge win on long pages). contain-intrinsic-size
+           reserves space so the scrollbar doesn't jump.
+           Applied under @supports so old engines degrade gracefully.
+        ================================================================ */
+        .section { margin-bottom: 44px; }
+        @supports (content-visibility: auto) {
+            .section {
+                content-visibility: auto;
+                contain-intrinsic-size: auto 1200px;
+            }
+        }
+
+        .section__header {
+            display: flex;
+            gap: 14px;
+            align-items: flex-start;
+            margin-bottom: 18px;
+        }
+        .section__num {
+            font-family: var(--font-mono);
+            font-weight: 700;
+            font-size: .85rem;
+            color: var(--color-muted);
+            border: 1px solid var(--color-border);
+            background: var(--color-surface);
+            border-radius: 8px;
+            padding: 4px 10px;
+            flex: none;
+        }
+        .section__title {
+            font-size: clamp(1.25rem, 1.1rem + 0.9vw, 1.7rem);
+            font-weight: 800;
+            letter-spacing: -0.01em;
+        }
+        .section__subtitle { color: var(--color-muted); }
+
+        /* ================================================================
+           COMPARISON — the Good vs Bad side-by-side unit.
+           Base: 1 column (mobile) → 2 columns ≥ 860px (mobile-first).
+        ================================================================ */
+        .comparison {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 18px;
+        }
+        @media (min-width: 860px) {
+            .comparison { grid-template-columns: 1fr 1fr; }
+        }
+
+        .comparison__side {
+            background: var(--color-surface);
+            border: 1px solid var(--color-border);
+            border-radius: var(--radius);
+            padding: 18px;
+            box-shadow: var(--shadow-sm);
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            /* CRITICAL: grid items default to min-width:auto, which means
+               they refuse to shrink below their content's min-width.
+               A 720px fixed table inside one side would force that grid
+               track to 720px+ and crush/overflow the other column.
+               min-width:0 lets the 1fr tracks split evenly and the inner
+               fixed-width content scroll/clip inside each side instead. */
+            min-width: 0;
+            /* :has() — parent styling driven by a child. If the side
+               contains a GOOD badge, tint the top border blue; BAD → red.
+               No JS, no extra classes on the parent. */
+        }
+        @supports selector(:has(*)) {
+            .comparison__side:has(.comparison__badge--bad)  { border-top: 4px solid var(--color-bad); }
+            .comparison__side:has(.comparison__badge--good) { border-top: 4px solid var(--color-good); }
+        }
+
+        .comparison__badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            align-self: flex-start;
+            font-weight: 800;
+            font-size: .75rem;
+            letter-spacing: .08em;
+            padding: 5px 12px;
+            border-radius: 999px;
+        }
+        .comparison__badge--bad  { background: var(--color-bad-soft);  color: var(--color-bad); }
+        .comparison__badge--good { background: var(--color-good-soft); color: var(--color-good); }
+
+        .comparison__title {
+            font-size: 1.05rem;
+            font-weight: 700;
+        }
+        .comparison__desc { color: var(--color-muted); font-size: .92rem; }
+
+        .comparison__demo {
+            background: var(--color-surface-2);
+            border: 1px dashed var(--color-border);
+            border-radius: var(--radius-sm);
+            padding: 14px;
+            /* Same automatic-minimum fix for the flex column: let the demo
+               box shrink with its side so wide content scrolls (see the
+               .comparison__demo--scroll modifier) instead of stretching. */
+            min-width: 0;
+        }
+        .comparison__demo--scroll { overflow-x: auto; } /* bad table scrolls instead of shrinking */
+
+        /* ================================================================
+           SECTION 1 — PRODUCT GRID: TABLE+FLOTAS (BAD) vs GRID (GOOD)
+        ================================================================ */
+
+        /* --- BAD: real <table> with fixed px width, never adapts --- */
+        .product-table {
+            width: 720px;                 /* fixed width — breaks below 720px */
+            min-width: 720px;             /* min-width wins over shrinking */
+            border-collapse: collapse;
+            font-size: 14px;
+            table-layout: fixed;
+        }
+        .product-table caption { caption-side: bottom; }
+        .product-table th {
+            text-align: left;
+            background: var(--color-surface-2);
+            border-bottom: 2px solid var(--color-border);
+        }
+        .product-table th,
+        .product-table td {
+            padding: 8px 10px;
+            border-bottom: 1px solid var(--color-border);
+            white-space: nowrap;          /* text refuses to wrap → overflow */
+        }
+        .product-table__rating { color: var(--color-warn); }
+
+        /* --- BAD bonus: the old float hack --- */
+        .float-demo {
+            margin-top: 12px;
+            border-top: 1px dashed var(--color-border);
+            padding-top: 10px;
+        }
+        .float-demo__box {
+            float: left;                  /* the classic hack */
+            width: 33.33%;
+            background: var(--color-bad-soft);
+            border: 1px solid var(--color-bad);
+            color: var(--color-bad);
+            font-size: .7rem;
+            font-weight: 700;
+            text-align: center;
+            padding: 10px 4px;
+        }
+        .float-demo__box--tall { padding: 26px 4px; }  /* uneven heights → misaligned rows */
+        .float-demo__clearfix::after {
+            content: "";
+            display: table;
+            clear: both;                  /* the obligatory clearfix hack */
+        }
+
+        /* --- GOOD: responsive CSS Grid.
+            repeat(auto-fit, minmax(250px, 1fr)) = as many ≥250px columns
+            as fit, then redistribute leftover space equally. Zero media
+            queries needed for the grid itself.
+            NOTE: min(250px, 100%) caps the track minimum at the container
+            width — a plain minmax(250px,1fr) would overflow when the
+            parent is narrower than 250px (e.g. a squeezed grid column). --- */
+        .product-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(min(250px, 100%), 1fr));
+            gap: clamp(10px, 1.6vw, 18px);
+        }
+
+        .product-card {
+            background: var(--color-surface);
+            border: 1px solid var(--color-border);
+            border-radius: var(--radius-sm);
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            transition: transform .2s ease, box-shadow .2s ease;
+        }
+        /* Hover via transform → composite-only, no reflow */
+        .product-card:hover {
+            transform: translateY(-4px);
+            box-shadow: var(--shadow-md);
+        }
+        /* :has() — a "Hot" tag inside the card upgrades the whole card */
+        @supports selector(:has(*)) {
+            .product-card:has(.product-card__tag--hot) {
+                border-color: var(--color-warn);
+                box-shadow: 0 0 0 1px var(--color-warn), var(--shadow-sm);
+            }
+        }
+        .product-card__media {
+            height: 96px;
+            display: grid;
+            place-items: center;
+            font-size: 1.9rem;
+            color: #fff;
+            background: linear-gradient(135deg, #64748b, #334155);
+        }
+        .product-card__body { padding: 12px; display: flex; flex-direction: column; gap: 6px; flex: 1; }
+        .product-card__tag {
+            align-self: flex-start;
+            font-size: .66rem;
+            font-weight: 700;
+            letter-spacing: .06em;
+            text-transform: uppercase;
+            color: var(--color-muted);
+            background: var(--color-surface-2);
+            padding: 2px 8px;
+            border-radius: 999px;
+        }
+        .product-card__tag--hot { background: var(--color-warn-soft); color: var(--color-warn); }
+        .product-card__title { font-size: .95rem; font-weight: 700; }
+        .product-card__rating { color: var(--color-warn); font-size: .8rem; }
+        .product-card__footer {
+            margin-top: auto;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 8px;
+        }
+        .product-card__price { font-weight: 800; font-size: 1rem; }
+        .product-card__btn {
+            border: 0;
+            border-radius: 999px;
+            background: var(--color-good);
+            color: #fff;
+            font: inherit;
+            font-size: .8rem;
+            font-weight: 700;
+            padding: 7px 14px;
+            cursor: pointer;
+            transition: background-color .15s ease, transform .15s ease;
+        }
+        .product-card__btn:hover { background: var(--color-good-strong); transform: scale(1.04); }
+
+        /* Fallback shown only if the browser lacks grid */
+        .no-grid-note { display: none; }
+        @supports not (display: grid) {
+            .product-grid { display: block; }
+            .no-grid-note { display: block; }
+        }
+
+        /* ================================================================
+           SECTION 2 — RESPONSIVE NAVS
+        ================================================================ */
+        .demo-frame { border-radius: var(--radius-sm); overflow: hidden; border: 1px solid var(--color-border); }
+        .demo-frame__bar {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            flex-wrap: wrap;
+            background: var(--color-surface);
+            border-bottom: 1px solid var(--color-border);
+            padding: 6px 12px;
+            font-size: .72rem;
+            color: var(--color-muted);
+        }
+        .demo-frame__label { margin-right: auto; }
+        .demo-frame__size { font-family: var(--font-mono); font-weight: 600; }
+        .demo-frame__bp {
+            font-family: var(--font-mono);
+            font-weight: 700;
+            padding: 2px 10px;
+            border-radius: 999px;
+            background: var(--color-surface-2);
+            border: 1px solid var(--color-border);
+        }
+        .demo-frame__bp[data-bp="desktop"] { color: var(--color-good);   border-color: var(--color-good); }
+        .demo-frame__bp[data-bp="tablet"]  { color: var(--color-warn);   border-color: var(--color-warn); }
+        .demo-frame__bp[data-bp="mobile"]  { color: var(--color-bad);    border-color: var(--color-bad); }
+
+        .demo-frame__viewport {
+            background: var(--color-surface-2);
+            padding: 14px;
+            overflow: hidden;             /* clips the fixed-width bad nav */
+        }
+        .demo-frame__overflow-note {
+            margin-top: 10px;
+            font-size: .75rem;
+            font-weight: 700;
+            color: var(--color-bad);
+            background: var(--color-bad-soft);
+            border: 1px solid var(--color-bad);
+            border-radius: var(--radius-sm);
+            padding: 6px 10px;
+        }
+
+        /* --- BAD nav: fixed px, no queries, nowrap --- */
+        .nav-bad {
+            min-width: 720px;             /* refuses to shrink */
+            background: var(--color-surface);
+            border: 1px solid var(--color-border);
+            border-radius: var(--radius-sm);
+            padding: 8px 6px;
+            white-space: nowrap;
+        }
+        .nav-bad__link {
+            display: inline-block;
+            padding: 8px 18px;            /* fixed padding, fixed type */
+            font-size: 15px;
+            color: var(--color-muted);
+            text-decoration: none;
+        }
+        .nav-bad__link.is-active { color: var(--color-bad); font-weight: 700; }
+
+        /* --- GOOD nav: flexbox + clamp + mobile-first ---
+            Base state (mobile): column, centered.
+            ≥640px: switch to a row. No fixed widths anywhere. --- */
+        .nav-good {
+            display: flex;
+            flex-direction: column;       /* mobile-first */
+            align-items: center;
+            gap: clamp(6px, 1.2vw, 14px);
+            background: var(--color-surface);
+            border: 1px solid var(--color-border);
+            border-radius: var(--radius-sm);
+            padding: 10px 14px;
+        }
+        .nav-good__link {
+            padding: 8px 14px;
+            border-radius: 999px;
+            color: var(--color-muted);
+            text-decoration: none;
+            font-weight: 600;
+            /* clamp() scales type with the container's viewport */
+            font-size: clamp(0.9rem, 0.82rem + 0.5vw, 1.05rem);
+            transition: background-color .15s ease, color .15s ease;
+        }
+        .nav-good__link:hover { color: var(--color-text); background: var(--color-surface-2); }
+        .nav-good__link.is-active { color: var(--color-good); background: var(--color-good-soft); }
+        .nav-good__link--cta {
+            background: var(--color-good);
+            color: #fff;
+        }
+        .nav-good__link--cta:hover { background: var(--color-good-strong); color: #fff; }
+        @media (min-width: 640px) {
+            .nav-good {
+                flex-direction: row;      /* enhance, don't fight */
+                flex-wrap: wrap;
+                justify-content: center;
+            }
+        }
+
+        /* ================================================================
+           SECTION 3 — ANIMATION PERFORMANCE
+        ================================================================ */
+        .anim-stage { display: flex; flex-direction: column; gap: 16px; }
+        @media (min-width: 560px) { .anim-stage { flex-direction: row; } }
+
+        .anim-stage__col { flex: 1; display: flex; flex-direction: column; gap: 10px; }
+
+        /* Holder: fixed box inside which each orb travels. */
+        .anim-stage__holder {
+            position: relative;
+            height: 170px;
+            border-radius: var(--radius-sm);
+            border: 1px solid var(--color-border);
+            background: var(--color-surface);
+            overflow: hidden;
+        }
+
+        .anim-stage__box {
+            position: absolute;
+            top: 0; left: 0;
+            width: 58px; height: 58px;
+            border-radius: 14px;
+            display: grid;
+            place-items: center;
+            font-weight: 800;
+            font-size: .78rem;
+            color: #fff;
+        }
+
+        /* BAD orb: driven by `left`/`top` in JS → every frame invalidates
+           layout for the whole document (Layout + Paint + Composite). */
+        .anim-stage__box--bad { background: var(--color-bad); }
+
+        /* GOOD orb: driven by `transform` + `opacity` → compositor-only.
+           will-change hints the engine to promote it to its own layer
+           (use sparingly — only for elements that WILL animate). */
+        .anim-stage__box--good {
+            background: var(--color-good);
+            will-change: transform;
+            transform: translate3d(0, 0, 0);
+        }
+
+        /* FPS / frame-time / forced-layout meters */
+        .anim-meters {
+            display: grid;
+            gap: 4px;
+            background: var(--color-surface-2);
+            border: 1px solid var(--color-border);
+            border-radius: var(--radius-sm);
+            padding: 10px;
+            font-size: .78rem;
+        }
+        .anim-meter__row { display: flex; justify-content: space-between; gap: 8px; }
+        .anim-meter__label { color: var(--color-muted); }
+        .anim-meter__value { font-family: var(--font-mono); font-weight: 600; }
+        .anim-meter__track {
+            height: 6px;
+            border-radius: 999px;
+            background: var(--color-border);
+            overflow: hidden;
+        }
+        .anim-meter__bar {
+            display: block;
+            height: 100%;
+            width: 0%;
+            border-radius: 999px;
+            background: var(--color-good);
+            transition: width .25s ease, background-color .25s ease;
+        }
+        .anim-meter__bar.is-low { background: var(--color-bad); }
+
+        .anim-meter__note { font-size: .72rem; color: var(--color-muted); }
+
+        /* Rendering pipeline strip: shows which stages each side touches */
+        .pipeline { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; font-size: .78rem; }
+        .pipeline__stage {
+            padding: 4px 10px;
+            border-radius: 999px;
+            border: 1px solid var(--color-border);
+            background: var(--color-surface);
+            color: var(--color-muted);
+            font-weight: 700;
+        }
+        .pipeline__stage--active-bad  { border-color: var(--color-bad);  color: var(--color-bad);  background: var(--color-bad-soft); }
+        .pipeline__stage--active-good { border-color: var(--color-good); color: var(--color-good); background: var(--color-good-soft); }
+        .pipeline__arrow { color: var(--color-muted); }
+
+        /* ================================================================
+           BUTTONS
+        ================================================================ */
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            border: 1px solid var(--color-border);
+            background: var(--color-surface);
+            color: var(--color-text);
+            font: inherit;
+            font-weight: 700;
+            font-size: .85rem;
+            padding: 9px 16px;
+            border-radius: 10px;
+            cursor: pointer;
+            box-shadow: var(--shadow-sm);
+            transition: transform .12s ease, box-shadow .15s ease, background-color .15s ease;
+        }
+        .btn:hover { transform: translateY(-1px); box-shadow: var(--shadow-md); }
+        .btn--bad  { background: var(--color-bad);  border-color: var(--color-bad);  color: #fff; }
+        .btn--bad:hover  { background: var(--color-bad-strong); }
+        .btn--good { background: var(--color-good); border-color: var(--color-good); color: #fff; }
+        .btn--good:hover { background: var(--color-good-strong); }
+        .btn--ghost { background: transparent; }
+
+        /* ================================================================
+           CODE SNIPPETS (with CSS-based syntax highlighting classes)
+        ================================================================ */
+        .code-block {
+            border: 1px solid var(--color-border);
+            border-radius: var(--radius-sm);
+            overflow: hidden;
+            background: var(--color-surface);
+        }
+        .code-block__title {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 7px 12px;
+            font-size: .72rem;
+            font-weight: 700;
+            color: var(--color-muted);
+            background: var(--color-surface-2);
+            border-bottom: 1px solid var(--color-border);
+            font-family: var(--font-mono);
+        }
+        .code-block pre {
+            margin: 0;
+            padding: 12px 14px;
+            overflow-x: auto;
+            font-family: var(--font-mono);
+            font-size: .78rem;
+            line-height: 1.55;
+            color: var(--color-text);
+        }
+        .code-block code { font-family: inherit; }
+
+        /* Highlighter tokens */
+        .tok--comment  { color: var(--tok-comment);  font-style: italic; }
+        .tok--selector { color: var(--tok-selector); }
+        .tok--property { color: var(--tok-property); }
+        .tok--value    { color: var(--tok-value); }
+        .tok--string   { color: var(--tok-string); }
+        .tok--keyword  { color: var(--tok-keyword); font-weight: 600; }
+        .tok--number   { color: var(--tok-value); }
+        .tok--punct    { color: var(--tok-punct); }
+
+        /* ================================================================
+           "WHY" LISTS + "WHY IT MATTERS" CALLOUTS
+        ================================================================ */
+        .why__list { list-style: none; display: grid; gap: 6px; font-size: .88rem; }
+        .why__item { display: flex; gap: 8px; align-items: flex-start; }
+        .why__item i { margin-top: 3px; }
+        .why__item--good i { color: var(--color-good); }
+        .why__item--bad  i { color: var(--color-bad); }
+
+        .callout {
+            border-radius: var(--radius-sm);
+            padding: 12px 14px;
+            font-size: .85rem;
+            display: grid;
+            gap: 4px;
+        }
+        .callout__title {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-weight: 800;
+            text-transform: uppercase;
+            font-size: .72rem;
+            letter-spacing: .07em;
+        }
+        .callout--bad  { background: var(--color-bad-soft);  border: 1px solid var(--color-bad);  color: var(--color-bad); }
+        .callout--good { background: var(--color-good-soft); border: 1px solid var(--color-good); color: var(--color-good); }
+        .callout--warn { background: var(--color-warn-soft); border: 1px solid var(--color-warn); color: var(--color-warn); }
+        .callout p { color: var(--color-text); }
+        .callout code { font-family: var(--font-mono); font-size: .8em; background: var(--color-surface); padding: 1px 5px; border-radius: 4px; }
+
+        /* ================================================================
+           SECTION 4 — DOM MANIPULATION
+        ================================================================ */
+        .list-demo {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 16px;
+        }
+        @media (min-width: 860px) { .list-demo { grid-template-columns: 1fr 1fr; } }
+
+        .list-demo__col { display: flex; flex-direction: column; gap: 10px; }
+        .list-demo__scroll {
+            max-height: 230px;
+            overflow-y: auto;
+            border: 1px solid var(--color-border);
+            border-radius: var(--radius-sm);
+            background: var(--color-surface);
+        }
+        .list-demo__list { list-style: none; }
+        .list-demo__item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 6px 12px;
+            font-size: .82rem;
+            border-bottom: 1px solid var(--color-surface-2);
+            font-family: var(--font-mono);
+        }
+        .list-demo__dot { width: 8px; height: 8px; border-radius: 50%; background: var(--color-muted); flex: none; }
+        .list-demo__list--bad  .list-demo__dot { background: var(--color-bad); }
+        .list-demo__list--good .list-demo__dot { background: var(--color-good); }
+        .list-demo__item--new { animation: fadeSlide .35s ease; }
+
+        /* New GOOD items animate in via transform/opacity (composite) */
+        @keyframes fadeSlide {
+            from { opacity: 0; transform: translateY(-6px); }
+            to   { opacity: 1; transform: translateY(0); }
+        }
+
+        .list-demo__result {
+            font-size: .8rem;
+            font-family: var(--font-mono);
+            color: var(--color-muted);
+            background: var(--color-surface-2);
+            border: 1px solid var(--color-border);
+            border-radius: var(--radius-sm);
+            padding: 8px 12px;
+            min-height: 38px;
+        }
+        .list-demo__result strong { color: var(--color-text); }
+
+        /* Layout thrashing demo */
+        .thrash-demo {
+            margin-top: 22px;
+            border-top: 1px dashed var(--color-border);
+            padding-top: 18px;
+            display: grid;
+            gap: 10px;
+        }
+        .thrash-demo__row { display: flex; gap: 14px; align-items: flex-start; flex-wrap: wrap; }
+        .thrash-demo__box {
+            width: 80px; height: 80px;
+            border-radius: 12px;
+            background: linear-gradient(135deg, var(--color-good), var(--color-good-strong));
+            flex: none;
+            transition: width .1s linear;
+        }
+        .thrash-demo__controls { display: flex; flex-direction: column; gap: 8px; flex: 1; min-width: 220px; }
+        .thrash-demo__results {
+            font-size: .8rem;
+            font-family: var(--font-mono);
+            color: var(--color-muted);
+            background: var(--color-surface-2);
+            border: 1px solid var(--color-border);
+            border-radius: var(--radius-sm);
+            padding: 8px 12px;
+            min-height: 38px;
+        }
+
+        /* ================================================================
+           SECTION 5 — NETWORK & CACHING (conceptual)
+        ================================================================ */
+        .cache-diagram {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 16px;
+        }
+        @media (min-width: 860px) { .cache-diagram { grid-template-columns: 1fr 1fr; } }
+
+        .cache-flow {
+            background: var(--color-surface-2);
+            border: 1px solid var(--color-border);
+            border-radius: var(--radius-sm);
+            padding: 14px;
+            display: grid;
+            gap: 8px;
+        }
+        .cache-node {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            background: var(--color-surface);
+            border: 1px solid var(--color-border);
+            border-left-width: 4px;
+            border-radius: var(--radius-sm);
+            padding: 10px 12px;
+            font-size: .82rem;
+            font-family: var(--font-mono);
+        }
+        .cache-node i { width: 18px; text-align: center; flex: none; }
+        .cache-node em { font-style: normal; margin-left: auto; font-size: .74rem; }
+        .cache-node--miss        { border-left-color: var(--color-bad); }
+        .cache-node--miss em     { color: var(--color-bad); }
+        .cache-node--hit         { border-left-color: var(--color-good); }
+        .cache-node--hit em      { color: var(--color-good); }
+        .cache-node--revalidate  { border-left-color: var(--color-warn); }
+        .cache-node--revalidate em { color: var(--color-warn); }
+        .cache-flow__arrow {
+            text-align: center;
+            color: var(--color-muted);
+            font-size: .78rem;
+            font-weight: 700;
+        }
+        .cache-flow__tag {
+            font-size: .72rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: .06em;
+            color: var(--color-muted);
+        }
+
+        /* Lazy-loading demo strip */
+        .lazy-demo {
+            margin-top: 22px;
+            border-top: 1px dashed var(--color-border);
+            padding-top: 18px;
+            display: grid;
+            gap: 12px;
+        }
+        .lazy-demo__head {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            flex-wrap: wrap;
+        }
+        .lazy-demo__status {
+            font-family: var(--font-mono);
+            font-size: .8rem;
+            font-weight: 600;
+            color: var(--color-good);
+        }
+        .lazy-demo__progress {
+            flex: 1;
+            min-width: 140px;
+            height: 8px;
+            border-radius: 999px;
+            background: var(--color-surface);
+            border: 1px solid var(--color-border);
+            overflow: hidden;
+        }
+        .lazy-demo__progress span {
+            display: block;
+            height: 100%;
+            width: 0%;
+            background: linear-gradient(90deg, var(--color-good), var(--color-good-strong));
+            transition: width .4s ease;
+        }
+        .lazy-demo__grid {
+            display: grid;
+            /* min(150px, 100%) — same overflow-proofing as the product grid */
+            grid-template-columns: repeat(auto-fit, minmax(min(150px, 100%), 1fr));
+            gap: 12px;
+        }
+        .lazy-card {
+            background: var(--color-surface);
+            border: 1px solid var(--color-border);
+            border-radius: var(--radius-sm);
+            overflow: hidden;
+            opacity: .92;
+        }
+        .lazy-card__thumb {
+            height: 84px;
+            display: grid;
+            place-items: center;
+            background: linear-gradient(110deg, var(--color-surface-2) 8%, var(--color-border) 18%, var(--color-surface-2) 33%);
+            background-size: 200% 100%;
+            animation: shimmer 1.4s linear infinite;   /* skeleton placeholder */
+            color: var(--color-muted);
+            font-size: 1.4rem;
+        }
+        @keyframes shimmer {
+            from { background-position: 120% 0; }
+            to   { background-position: -120% 0; }
+        }
+        .lazy-card.is-loaded .lazy-card__thumb {
+            animation: none;                            /* real content replaces skeleton */
+            color: #fff;
+        }
+        .lazy-card.is-loaded .lazy-card__info { opacity: 1; transform: translateY(0); }
+        .lazy-card__info {
+            padding: 10px;
+            opacity: 0;
+            transform: translateY(4px);
+            transition: opacity .35s ease, transform .35s ease;   /* composite-only reveal */
+        }
+        .lazy-card__title { font-size: .85rem; font-weight: 700; }
+        .lazy-card__meta { font-size: .72rem; color: var(--color-muted); }
+
+        /* ================================================================
+           SESSION STATS PANEL (fixed, bottom-right)
+        ================================================================ */
+        .stats-panel {
+            position: fixed;
+            right: 14px;
+            bottom: 14px;
+            z-index: 900;
+            width: 232px;
+            background: var(--color-surface);
+            border: 1px solid var(--color-border);
+            border-radius: var(--radius);
+            box-shadow: var(--shadow-lg);
+            font-size: .78rem;
+            overflow: hidden;
+        }
+        /* :has() — if any stat is alarming (long tasks), tint the panel */
+        @supports selector(:has(*)) {
+            .stats-panel:has(.stat--alert) {
+                border-color: var(--color-bad);
+                box-shadow: 0 0 0 1px var(--color-bad), var(--shadow-lg);
+            }
+        }
+        .stats-panel__toggle {
+            width: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 8px;
+            padding: 10px 12px;
+            border: 0;
+            background: var(--color-surface-2);
+            color: var(--color-text);
+            font: inherit;
+            font-weight: 700;
+            cursor: pointer;
+        }
+        .stats-panel__body {
+            display: grid;
+            gap: 4px;
+            padding: 10px 12px;
+            transition: max-height .25s ease;
+            max-height: 400px;
+        }
+        .stats-panel.is-collapsed .stats-panel__body { max-height: 0; padding-top: 0; padding-bottom: 0; overflow: hidden; }
+        .stats-panel h4 { font-size: .72rem; text-transform: uppercase; letter-spacing: .08em; color: var(--color-muted); margin-bottom: 4px; }
+        .stat { display: flex; justify-content: space-between; gap: 8px; }
+        .stat__label { color: var(--color-muted); }
+        .stat__value { font-family: var(--font-mono); font-weight: 600; }
+        .stat--alert .stat__value { color: var(--color-bad); }
+
+        /* ================================================================
+           FOOTER
+        ================================================================ */
+        .page-footer {
+            margin-top: 40px;
+            border-top: 1px solid var(--color-border);
+            padding-block: 22px 60px;
+            color: var(--color-muted);
+            font-size: .8rem;
+            display: grid;
+            gap: 6px;
+        }
+
+        .noscript-note {
+            background: var(--color-warn-soft);
+            border: 1px solid var(--color-warn);
+            color: var(--color-warn);
+            border-radius: var(--radius-sm);
+            padding: 12px 16px;
+            font-weight: 600;
+            margin-bottom: 24px;
+        }
+
+        /* ================================================================
+           REDUCED MOTION — respect the user's OS setting.
+           JS also pauses the animation loops when this matches.
+        ================================================================ */
+        @media (prefers-reduced-motion: reduce) {
+            html { scroll-behavior: auto; }
+            *,
+            *::before,
+            *::after {
+                animation-duration: 0.001s !important;
+                animation-iteration-count: 1 !important;
+                transition-duration: 0.001s !important;
+            }
+        }
+    </style>
+</head>
+<body>
+
+    <a class="skip-link" href="#main">Skip to content</a>
+
+    <!-- ================================================================
+         HEADER
+    ================================================================ -->
+    <header class="page-header shell">
+        <div class="page-header__brand">
+            <span class="page-header__logo" aria-hidden="true"><i class="fa-solid fa-wand-magic-sparkles"></i></span>
+            <div>
+                <h1 class="page-header__title">CSS &amp; Browser Rendering — <span class="text-good">Good</span> vs <span class="text-bad">Bad</span></h1>
+                <p class="page-header__subtitle">
+                    An interactive tour of the rendering pipeline: layout, paint and composite.
+                    Everything you click is measured — watch the meters, not the vibes.
+                </p>
+            </div>
+        </div>
+        <div class="page-header__actions">
+            <button type="button" class="btn btn--ghost" id="resetBtn" title="Reload the page and all demos">
+                <i class="fa-solid fa-rotate" aria-hidden="true"></i> Reset
+            </button>
+            <button type="button" class="theme-toggle" id="themeToggle" aria-pressed="false" aria-label="Toggle color theme">
+                <i class="fa-solid fa-sun" aria-hidden="true"></i>
+                <i class="fa-solid fa-moon" aria-hidden="true"></i>
+                <span class="theme-toggle__label" id="themeToggleLabel">Dark</span>
+            </button>
+        </div>
+    </header>
+
+    <nav class="toc shell" aria-label="Table of contents">
+        <a class="toc__chip" href="#layout">01 &middot; Layout</a>
+        <a class="toc__chip" href="#responsive">02 &middot; Responsive</a>
+        <a class="toc__chip" href="#animations">03 &middot; Animation</a>
+        <a class="toc__chip" href="#dom">04 &middot; DOM</a>
+        <a class="toc__chip" href="#network">05 &middot; Network</a>
+    </nav>
+
+    <main id="main" class="shell">
+        <noscript><p class="noscript-note"><i class="fa-solid fa-triangle-exclamation" aria-hidden="true"></i> This demo requires JavaScript for its interactive meters, counters and lazy-loading examples.</p></noscript>
+
+        <!-- ============================================================
+             SECTION 1 — LAYOUT COMPARISON
+        ============================================================ -->
+        <section class="section" id="layout" aria-labelledby="layout-title">
+            <header class="section__header">
+                <span class="section__num" aria-hidden="true">01</span>
+                <div class="section__heading">
+                    <h2 class="section__title" id="layout-title">Layout Comparison</h2>
+                    <p class="section__subtitle">Tables &amp; floats vs modern CSS Grid — identical product data, very different behavior.</p>
+                </div>
+            </header>
+
+            <div class="comparison">
+                <!-- ============ BAD ============ -->
+                <article class="comparison__side">
+                    <span class="comparison__badge comparison__badge--bad"><i class="fa-solid fa-xmark" aria-hidden="true"></i> BAD</span>
+                    <h3 class="comparison__title">Fixed-width <code>&lt;table&gt;</code> + floats</h3>
+                    <p class="comparison__desc">
+                        The table below is hard-coded to <strong>720px</strong>. On phones it overflows
+                        (try shrinking the window), and the old <code>float</code> hack needs clearfix
+                        hacks and breaks with uneven heights.
+                    </p>
+
+                    <div class="comparison__demo comparison__demo--scroll">
+                        <table class="product-table">
+                            <caption class="visually-hidden">Product list rendered as a fixed-width table</caption>
+                            <thead>
+                                <tr>
+                                    <th scope="col">Product</th>
+                                    <th scope="col">Price</th>
+                                    <th scope="col">Rating</th>
+                                </tr>
+                            </thead>
+                            <tbody class="product-table__body"><!-- populated by JS --></tbody>
+                        </table>
+
+                        <div class="float-demo" aria-label="Legacy float layout example">
+                            <div class="float-demo__box">float 1</div>
+                            <div class="float-demo__box">float 2</div>
+                            <div class="float-demo__box float-demo__box--tall">float 3<br />(tall)</div>
+                            <div class="float-demo__clearfix"></div>
+                        </div>
+                    </div>
+
+                    <div class="code-block" data-lang="css">
+                        <div class="code-block__title"><i class="fa-solid fa-code" aria-hidden="true"></i> layout-bad.css</div>
+<pre><code>/* BAD — &lt;table&gt; with fixed px */
+table.products {
+  width: 720px;          /* never adapts */
+  table-layout: fixed;
+  font-size: 15px;       /* fixed type */
+}
+/* …or the float hack */
+.col { float: left; width: 33.33%; }
+/* no media queries, no wrapping →
+   broken on small screens */</code></pre>
+                    </div>
+
+                    <ul class="why__list">
+                        <li class="why__item why__item--bad"><i class="fa-solid fa-circle-xmark" aria-hidden="true"></i><span>Fixed widths overflow small viewports; users must scroll horizontally.</span></li>
+                        <li class="why__item why__item--bad"><i class="fa-solid fa-circle-xmark" aria-hidden="true"></i><span><code>float</code> removes items from normal flow — clearfix hacks and collapsed heights.</span></li>
+                        <li class="why__item why__item--bad"><i class="fa-solid fa-circle-xmark" aria-hidden="true"></i><span>Every breakpoint needs another hand-written override → CSS bloat.</span></li>
+                    </ul>
+
+                    <aside class="callout callout--bad">
+                        <span class="callout__title"><i class="fa-solid fa-triangle-exclamation" aria-hidden="true"></i> Why it matters</span>
+                        <p>Rigid layouts force the browser to <strong>reflow</strong> the whole table whenever content or viewport changes, and they alienate the ~60% of traffic on mobile.</p>
+                    </aside>
+                </article>
+
+                <!-- ============ GOOD ============ -->
+                <article class="comparison__side">
+                    <span class="comparison__badge comparison__badge--good"><i class="fa-solid fa-check" aria-hidden="true"></i> GOOD</span>
+                    <h3 class="comparison__title">CSS Grid — <code>auto-fit</code> + <code>minmax()</code></h3>
+                    <p class="comparison__desc">
+                        One line of Grid does the whole responsive job: as many <code>250px</code>-minimum columns
+                        as fit, then leftover space is shared. No media queries required for the grid itself.
+                    </p>
+
+                    <div class="comparison__demo">
+                        <div class="product-grid" aria-label="Responsive product card grid"><!-- populated by JS --></div>
+                    </div>
+
+                    <div class="code-block" data-lang="css">
+                        <div class="code-block__title"><i class="fa-solid fa-code" aria-hidden="true"></i> layout-good.css</div>
+<pre><code>/* GOOD — responsive by default */
+.product-grid {
+  display: grid;
+  grid-template-columns:
+    repeat(auto-fit, minmax(250px, 1fr));
+  gap: clamp(10px, 1.6vw, 18px);
+}
+.product-card { transition: transform .2s; }
+.product-card:hover { transform: translateY(-4px); }
+/* transform hover = composite only */</code></pre>
+                    </div>
+
+                    <ul class="why__list">
+                        <li class="why__item why__item--good"><i class="fa-solid fa-circle-check" aria-hidden="true"></i><span><code>auto-fit</code> wraps items automatically — 1 column on a phone, 4 on a desktop.</span></li>
+                        <li class="why__item why__item--good"><i class="fa-solid fa-circle-check" aria-hidden="true"></i><span><code>minmax(250px, 1fr)</code> guarantees a usable minimum and fair space distribution.</span></li>
+                        <li class="why__item why__item--good"><i class="fa-solid fa-circle-check" aria-hidden="true"></i><span>Hover effects use <code>transform</code> — compositor-only, zero reflow.</span></li>
+                    </ul>
+
+                    <aside class="callout callout--good">
+                        <span class="callout__title"><i class="fa-solid fa-lightbulb" aria-hidden="true"></i> Why it matters</span>
+                        <p>Grid keeps layout calculations minimal and predictable. Pages adapt to any screen with a few declarations instead of a pile of media queries.</p>
+                    </aside>
+                </article>
+            </div>
+        </section>
+
+        <!-- ============================================================
+             SECTION 2 — RESPONSIVE COMPARISON
+        ============================================================ -->
+        <section class="section" id="responsive" aria-labelledby="responsive-title">
+            <header class="section__header">
+                <span class="section__num" aria-hidden="true">02</span>
+                <div class="section__heading">
+                    <h2 class="section__title" id="responsive-title">Responsive Comparison</h2>
+                    <p class="section__subtitle">Two navigation bars inside live "viewport" frames. Resize the window — a <code>ResizeObserver</code> updates the readouts below each frame.</p>
+                </div>
+            </header>
+
+            <div class="comparison">
+                <!-- ============ BAD ============ -->
+                <article class="comparison__side">
+                    <span class="comparison__badge comparison__badge--bad"><i class="fa-solid fa-xmark" aria-hidden="true"></i> BAD</span>
+                    <h3 class="comparison__title">Fixed pixel nav</h3>
+                    <p class="comparison__desc">Hard-coded <code>720px</code> min-width, <code>nowrap</code> links, fixed <code>15px</code> type. Below 720px the bar is simply <strong>clipped</strong>.</p>
+
+                    <div class="demo-frame" data-frame>
+                        <div class="demo-frame__bar">
+                            <span class="demo-frame__label"><i class="fa-solid fa-window-restore" aria-hidden="true"></i> Viewport width</span>
+                            <span class="demo-frame__size" data-size>— px</span>
+                            <span class="demo-frame__bp" data-bp>mobile</span>
+                        </div>
+                        <div class="demo-frame__viewport" data-viewport>
+                            <nav class="nav-bad" aria-label="Bad responsive navigation">
+                                <a class="nav-bad__link is-active" href="#" aria-current="page">Home</a>
+                                <a class="nav-bad__link" href="#">Products</a>
+                                <a class="nav-bad__link" href="#">Pricing</a>
+                                <a class="nav-bad__link" href="#">Blog</a>
+                                <a class="nav-bad__link" href="#">About</a>
+                                <a class="nav-bad__link" href="#">Contact</a>
+                            </nav>
+                            <p class="demo-frame__overflow-note" data-overflow hidden><i class="fa-solid fa-scissors" aria-hidden="true"></i> 720px fixed — links are clipped on this viewport</p>
+                        </div>
+                    </div>
+
+                    <div class="code-block" data-lang="css">
+                        <div class="code-block__title"><i class="fa-solid fa-code" aria-hidden="true"></i> nav-bad.css</div>
+<pre><code>/* BAD — fixed pixels everywhere */
+.nav { width: 720px; font-size: 15px; }
+.nav a {
+  display: inline-block;
+  padding: 0 18px;
+  white-space: nowrap;
+}
+/* no media queries → breaks */</code></pre>
+                    </div>
+
+                    <aside class="callout callout--bad">
+                        <span class="callout__title"><i class="fa-solid fa-triangle-exclamation" aria-hidden="true"></i> Why it matters</span>
+                        <p>Pixel-fixed components can't adapt to <strong>any</strong> viewport you didn't predict. Combined with desktop-first CSS, mobile users pay the price.</p>
+                    </aside>
+                </article>
+
+                <!-- ============ GOOD ============ -->
+                <article class="comparison__side">
+                    <span class="comparison__badge comparison__badge--good"><i class="fa-solid fa-check" aria-hidden="true"></i> GOOD</span>
+                    <h3 class="comparison__title">Flexbox + <code>clamp()</code> + mobile-first</h3>
+                    <p class="comparison__desc">Flexbox with <code>flex-wrap</code>, fluid type via <code>clamp()</code>, and a mobile-first <code>min-width</code> query that enhances rather than patches.</p>
+
+                    <div class="demo-frame" data-frame>
+                        <div class="demo-frame__bar">
+                            <span class="demo-frame__label"><i class="fa-solid fa-window-restore" aria-hidden="true"></i> Viewport width</span>
+                            <span class="demo-frame__size" data-size>— px</span>
+                            <span class="demo-frame__bp" data-bp>mobile</span>
+                        </div>
+                        <div class="demo-frame__viewport" data-viewport>
+                            <nav class="nav-good" aria-label="Good responsive navigation">
+                                <a class="nav-good__link is-active" href="#" aria-current="page">Home</a>
+                                <a class="nav-good__link" href="#">Products</a>
+                                <a class="nav-good__link" href="#">Pricing</a>
+                                <a class="nav-good__link" href="#">Blog</a>
+                                <a class="nav-good__link" href="#">About</a>
+                                <a class="nav-good__link nav-good__link--cta" href="#">Sign up</a>
+                            </nav>
+                        </div>
+                    </div>
+
+                    <div class="code-block" data-lang="css">
+                        <div class="code-block__title"><i class="fa-solid fa-code" aria-hidden="true"></i> nav-good.css</div>
+<pre><code>/* GOOD — mobile-first flexbox */
+.nav {
+  display: flex;
+  flex-direction: column;      /* base: stacked */
+  gap: clamp(6px, 1.2vw, 14px);
+}
+.nav__link {
+  font-size: clamp(0.9rem, 0.82rem + 0.5vw, 1.05rem);
+}
+@media (min-width: 640px) {
+  .nav { flex-direction: row; flex-wrap: wrap; }
+}</code></pre>
+                    </div>
+
+                    <ul class="why__list">
+                        <li class="why__item why__item--good"><i class="fa-solid fa-circle-check" aria-hidden="true"></i><span><code>clamp()</code> keeps type readable at every size without a single extra query.</span></li>
+                        <li class="why__item why__item--good"><i class="fa-solid fa-circle-check" aria-hidden="true"></i><span>Mobile-first <code>min-width</code> queries only ever <em>add</em> layout — no fighting an inherited desktop layout.</span></li>
+                        <li class="why__item why__item--good"><i class="fa-solid fa-circle-check" aria-hidden="true"></i><span>Flexbox lays out siblings in one pass — no absolute positioning, no clearfix.</span></li>
+                    </ul>
+
+                    <aside class="callout callout--good">
+                        <span class="callout__title"><i class="fa-solid fa-lightbulb" aria-hidden="true"></i> Why it matters</span>
+                        <p>Fluid components survive any future screen size (foldables, ultrawide, split-view) with <strong>zero</strong> maintenance. That's what "responsive" actually means.</p>
+                    </aside>
+                </article>
+            </div>
+        </section>
+
+        <!-- ============================================================
+             SECTION 3 — ANIMATION PERFORMANCE
+        ============================================================ -->
+        <section class="section" id="animations" aria-labelledby="animations-title">
+            <header class="section__header">
+                <span class="section__num" aria-hidden="true">03</span>
+                <div class="section__heading">
+                    <h2 class="section__title" id="animations-title">Animation Performance</h2>
+                    <p class="section__subtitle">Both orbs are driven by <code>requestAnimationFrame</code>. One invalidates layout every frame; the other only touches the compositor.</p>
+                </div>
+            </header>
+
+            <div class="comparison">
+                <!-- ============ BAD ============ -->
+                <article class="comparison__side">
+                    <span class="comparison__badge comparison__badge--bad"><i class="fa-solid fa-xmark" aria-hidden="true"></i> BAD</span>
+                    <h3 class="comparison__title">Animating <code>left</code> / <code>top</code></h3>
+                    <p class="comparison__desc">
+                        Each frame writes <code>left</code>/<code>top</code> and then <em>forces</em> a synchronous layout read
+                        (<code>offsetLeft</code>). That read cannot be deferred: the browser must run
+                        <strong>Style → Layout → Paint → Composite</strong> on every single frame.
+                    </p>
+
+                    <div class="anim-stage__holder">
+                        <div class="anim-stage__box anim-stage__box--bad" data-anim="bad">BAD</div>
+                    </div>
+
+                    <div class="anim-meters">
+                        <div class="anim-meter">
+                            <div class="anim-meter__row"><span class="anim-meter__label">FPS</span><span class="anim-meter__value" data-meter="fps">—</span></div>
+                            <div class="anim-meter__track"><span class="anim-meter__bar" data-meter="bar"></span></div>
+                            <div class="anim-meter__row"><span class="anim-meter__label">Frame time</span><span class="anim-meter__value" data-meter="frame">—</span></div>
+                            <div class="anim-meter__row"><span class="anim-meter__label">Forced layout reads</span><span class="anim-meter__value" data-meter="ops">0</span></div>
+                            <div class="anim-meter__row"><span class="anim-meter__label">Layout shifts (position deltas)</span><span class="anim-meter__value" data-meter="shifts">0</span></div>
+                            <div class="anim-meter__row"><span class="anim-meter__label">ResizeObserver fires</span><span class="anim-meter__value" data-meter="ro">0</span></div>
+                        </div>
+                        <p class="anim-meter__note">RO never fires here — it only watches <em>size</em>, so positional reflows stay invisible to it.</p>
+                    </div>
+
+                    <div>
+                        <button type="button" class="btn btn--bad" data-toggle-anim="bad"><i class="fa-solid fa-pause" aria-hidden="true"></i><span data-label>Pause</span></button>
+                    </div>
+
+                    <div class="code-block" data-lang="css">
+                        <div class="code-block__title"><i class="fa-solid fa-code" aria-hidden="true"></i> anim-bad.css</div>
+<pre><code>/* BAD — animates layout properties */
+@keyframes drift {
+  from { left: 0; top: 0; }
+  to   { left: 140px; top: 90px; }
+}
+.orb { position: absolute; left: 0; top: 0; }
+/* left/top → Style + Layout + Paint
+   + Composite, every frame */</code></pre>
+                    </div>
+
+                    <aside class="callout callout--bad">
+                        <span class="callout__title"><i class="fa-solid fa-triangle-exclamation" aria-hidden="true"></i> Why it matters</span>
+                        <p>Layout is the most expensive stage of the pipeline. Animating <code>left</code>/<code>top</code> reflows the document <strong>60× per second</strong> — jank on mid-range phones, and the main thread blocks everything else.</p>
+                    </aside>
+                </article>
+
+                <!-- ============ GOOD ============ -->
+                <article class="comparison__side">
+                    <span class="comparison__badge comparison__badge--good"><i class="fa-solid fa-check" aria-hidden="true"></i> GOOD</span>
+                    <h3 class="comparison__title">Animating <code>transform</code> + <code>opacity</code></h3>
+                    <p class="comparison__desc">
+                        <code>transform</code> and <code>opacity</code> are handled by the <strong>compositor thread</strong>:
+                        no layout, no paint. The orb is promoted to its own layer
+                        (<code>will-change</code>) and just glides.
+                    </p>
+
+                    <div class="anim-stage__holder">
+                        <div class="anim-stage__box anim-stage__box--good" data-anim="good">GOOD</div>
+                    </div>
+
+                    <div class="anim-meters">
+                        <div class="anim-meter">
+                            <div class="anim-meter__row"><span class="anim-meter__label">FPS</span><span class="anim-meter__value" data-meter="fps">—</span></div>
+                            <div class="anim-meter__track"><span class="anim-meter__bar" data-meter="bar"></span></div>
+                            <div class="anim-meter__row"><span class="anim-meter__label">Frame time</span><span class="anim-meter__value" data-meter="frame">—</span></div>
+                            <div class="anim-meter__row"><span class="anim-meter__label">Forced layout reads</span><span class="anim-meter__value" data-meter="ops">0</span></div>
+                        </div>
+                        <p class="anim-meter__note">Zero reads, zero writes to layout properties. The main thread stays free.</p>
+                    </div>
+
+                    <div>
+                        <button type="button" class="btn btn--good" data-toggle-anim="good"><i class="fa-solid fa-pause" aria-hidden="true"></i><span data-label>Pause</span></button>
+                    </div>
+
+                    <div class="code-block" data-lang="css">
+                        <div class="code-block__title"><i class="fa-solid fa-code" aria-hidden="true"></i> anim-good.css</div>
+<pre><code>/* GOOD — compositor-only properties */
+.orb {
+  transform: translate3d(0, 0, 0);
+  opacity: 1;
+  will-change: transform;   /* layer hint */
+}
+/* transform + opacity skip
+   Layout &amp; Paint → Composite */</code></pre>
+                    </div>
+
+                    <ul class="why__list">
+                        <li class="why__item why__item--good"><i class="fa-solid fa-circle-check" aria-hidden="true"></i><span><code>transform</code>/<code>opacity</code> run off the main thread — 60fps even while JS is busy.</span></li>
+                        <li class="why__item why__item--good"><i class="fa-solid fa-circle-check" aria-hidden="true"></i><span><code>will-change</code> is a <em>hint</em>, used only for elements that will actually animate.</span></li>
+                    </ul>
+
+                    <div class="pipeline" aria-label="Rendering pipeline stages: GOOD skips Layout and Paint">
+                        <span class="pipeline__stage pipeline__stage--active-good">Style</span>
+                        <span class="pipeline__arrow">→</span>
+                        <span class="pipeline__stage">Layout</span>
+                        <span class="pipeline__arrow">→</span>
+                        <span class="pipeline__stage">Paint</span>
+                        <span class="pipeline__arrow">→</span>
+                        <span class="pipeline__stage pipeline__stage--active-good">Composite</span>
+                    </div>
+
+                    <aside class="callout callout--good">
+                        <span class="callout__title"><i class="fa-solid fa-lightbulb" aria-hidden="true"></i> Why it matters</span>
+                        <p>Compositor-only animations keep the <strong>main thread free</strong> for input and JS. That's the difference between a "smooth 60fps" product and a janky one.</p>
+                    </aside>
+                </article>
+            </div>
+        </section>
+
+        <!-- ============================================================
+             SECTION 4 — DOM MANIPULATION
+        ============================================================ -->
+        <section class="section" id="dom" aria-labelledby="dom-title">
+            <header class="section__header">
+                <span class="section__num" aria-hidden="true">04</span>
+                <div class="section__heading">
+                    <h2 class="section__title" id="dom-title">DOM Manipulation</h2>
+                    <p class="section__subtitle">Same work, different technique. Each button appends 100 items and reports elapsed time, forced reads and style writes.</p>
+                </div>
+            </header>
+
+            <div class="list-demo">
+                <!-- ============ BAD ============ -->
+                <div class="list-demo__col">
+                    <h3 class="comparison__title">One-by-one appends</h3>
+                    <div class="list-demo__scroll">
+                        <ul class="list-demo__list list-demo__list--bad" data-list="bad" aria-label="Bad list — items appended one at a time"></ul>
+                    </div>
+                    <button type="button" class="btn btn--bad" data-add="bad"><i class="fa-solid fa-plus" aria-hidden="true"></i> Add 100 Items</button>
+                    <p class="list-demo__result" data-result="bad" role="status" aria-live="polite">Ready — 100 items</p>
+                </div>
+
+                <!-- ============ GOOD ============ -->
+                <div class="list-demo__col">
+                    <h3 class="comparison__title">DocumentFragment batch</h3>
+                    <div class="list-demo__scroll">
+                        <ul class="list-demo__list list-demo__list--good" data-list="good" aria-label="Good list — items appended via DocumentFragment"></ul>
+                    </div>
+                    <button type="button" class="btn btn--good" data-add="good"><i class="fa-solid fa-plus" aria-hidden="true"></i> Add 100 Items</button>
+                    <p class="list-demo__result" data-result="good" role="status" aria-live="polite">Ready — 100 items</p>
+                </div>
+            </div>
+
+            <div class="code-block" data-lang="js" style="margin-top:16px;">
+                <div class="code-block__title"><i class="fa-solid fa-code" aria-hidden="true"></i> dom-bad.js vs dom-good.js</div>
+<pre><code>// BAD — 100 appends, 100 forced reflows
+for (let i = 0; i &lt; 100; i++) {
+  const li = document.createElement('li');
+  li.textContent = 'Item ' + i;
+  list.appendChild(li);   // invalidates layout
+  void list.offsetHeight; // forced reflow
+}
+
+// GOOD — build off-DOM, insert once
+const frag = document.createDocumentFragment();
+for (let i = 0; i &lt; 100; i++) {
+  const li = document.createElement('li');
+  li.textContent = 'Item ' + i;
+  frag.appendChild(li);   // no layout work
+}
+list.appendChild(frag);   // one reflow total</code></pre>
+            </div>
+
+            <!-- Layout thrashing bonus demo -->
+            <div class="thrash-demo">
+                <h3 class="comparison__title">Bonus: Layout Thrashing</h3>
+                <p class="comparison__desc">
+                    Interleaving <em>reads</em> (e.g. <code>offsetWidth</code>) with <em>writes</em> (e.g. <code>style.width</code>)
+                    forces the browser to reflow on <strong>every read</strong> — the classic read-write ping-pong.
+                    The fix: batch all reads first, then write.
+                </p>
+                <div class="thrash-demo__row">
+                    <div class="thrash-demo__box" data-thrash-box aria-hidden="true"></div>
+                    <div class="thrash-demo__controls">
+                        <div style="display:flex;gap:8px;flex-wrap:wrap;">
+                            <button type="button" class="btn btn--bad" data-thrash="bad">Run BAD loop</button>
+                            <button type="button" class="btn btn--good" data-thrash="good">Run GOOD loop</button>
+                        </div>
+                        <p class="thrash-demo__results" data-thrash-result role="status" aria-live="polite">Click a loop to measure it.</p>
+                    </div>
+                </div>
+            </div>
+
+            <aside class="callout callout--warn" style="margin-top:16px;">
+                <span class="callout__title"><i class="fa-solid fa-triangle-exclamation" aria-hidden="true"></i> Why it matters</span>
+                <p>Each forced reflow can cost <strong>1–5ms</strong>. A 100-item loop with reads costs hundreds of ms of main-thread time — exactly what <code>DocumentFragment</code> and read/write batching eliminate.</p>
+            </aside>
+        </section>
+
+        <!-- ============================================================
+             SECTION 5 — NETWORK & CACHING (conceptual)
+        ============================================================ -->
+        <section class="section" id="network" aria-labelledby="network-title">
+            <header class="section__header">
+                <span class="section__num" aria-hidden="true">05</span>
+                <div class="section__heading">
+                    <h2 class="section__title" id="network-title">Network &amp; Caching</h2>
+                    <p class="section__subtitle">Rendering doesn't start at parse — it starts at the network. Below: the conceptual request flow, then a live lazy-loading demo.</p>
+                </div>
+            </header>
+
+            <div class="cache-diagram">
+                <!-- ============ BAD ============ -->
+                <article class="comparison__side">
+                    <span class="comparison__badge comparison__badge--bad"><i class="fa-solid fa-xmark" aria-hidden="true"></i> BAD</span>
+                    <h3 class="comparison__title">No cache headers</h3>
+                    <p class="comparison__desc">Without <code>Cache-Control</code>, the browser re-downloads <strong>everything on every visit</strong> — even byte-identical files.</p>
+                    <div class="cache-flow" aria-label="Bad caching flow: full download on every visit">
+                        <span class="cache-flow__tag">Every single visit</span>
+                        <div class="cache-node cache-node--miss"><i class="fa-solid fa-rotate" aria-hidden="true"></i><span>GET /app.css</span><em>200 OK · 21 KB</em></div>
+                        <div class="cache-flow__arrow">↓</div>
+                        <div class="cache-node cache-node--miss"><i class="fa-solid fa-rotate" aria-hidden="true"></i><span>GET /app.js</span><em>200 OK · 48 KB</em></div>
+                        <div class="cache-flow__arrow">↓</div>
+                        <div class="cache-node cache-node--miss"><i class="fa-solid fa-rotate" aria-hidden="true"></i><span>GET /logo.png</span><em>200 OK · 9 KB</em></div>
+                        <div class="cache-flow__arrow">↓</div>
+                        <div class="cache-node cache-node--miss"><i class="fa-solid fa-rotate" aria-hidden="true"></i><span>GET /font.woff2</span><em>200 OK · 32 KB</em></div>
+                    </div>
+                    <div class="code-block" data-lang="http">
+                        <div class="code-block__title"><i class="fa-solid fa-code" aria-hidden="true"></i> response headers</div>
+<pre><code># no cache headers present
+GET /app.css  200 OK  (21 KB)   ← every visit
+GET /app.js   200 OK  (48 KB)   ← every visit</code></pre>
+                    </div>
+                    <aside class="callout callout--bad">
+                        <span class="callout__title"><i class="fa-solid fa-triangle-exclamation" aria-hidden="true"></i> Why it matters</span>
+                        <p>Re-downloading static assets multiplies load time, battery drain and server cost — and it's trivially avoidable.</p>
+                    </aside>
+                </article>
+
+                <!-- ============ GOOD ============ -->
+                <article class="comparison__side">
+                    <span class="comparison__badge comparison__badge--good"><i class="fa-solid fa-check" aria-hidden="true"></i> GOOD</span>
+                    <h3 class="comparison__title">Immutable cache + cache-busting</h3>
+                    <p class="comparison__desc">Hash-busted filenames (<code>app.a1b2c3.css</code>) make content <em>immutable</em>: the browser fetches once, then serves from cache forever. Deploys change the hash → new file.</p>
+                    <div class="cache-flow" aria-label="Good caching flow: first visit downloads, subsequent visits hit cache">
+                        <span class="cache-flow__tag">First visit</span>
+                        <div class="cache-node cache-node--miss"><i class="fa-solid fa-download" aria-hidden="true"></i><span>GET /app.a1b2c3.css</span><em>200 OK</em></div>
+                        <div class="cache-flow__arrow">↓ cached with <code>immutable</code></div>
+                        <div class="cache-node cache-node--hit"><i class="fa-solid fa-database" aria-hidden="true"></i><span>GET /app.a1b2c3.css</span><em>from cache · 0 ms</em></div>
+                        <div class="cache-flow__arrow">↓ next deploy → new hash</div>
+                        <div class="cache-node cache-node--hit"><i class="fa-solid fa-database" aria-hidden="true"></i><span>GET /app.f4e5d6.css</span><em>from cache · 0 ms</em></div>
+                        <div class="cache-flow__arrow">↓</div>
+                        <div class="cache-node cache-node--revalidate"><i class="fa-solid fa-arrows-rotate" aria-hidden="true"></i><span>GET /api/config</span><em>304 Not Modified</em></div>
+                    </div>
+                    <div class="code-block" data-lang="http">
+                        <div class="code-block__title"><i class="fa-solid fa-code" aria-hidden="true"></i> response headers</div>
+<pre><code>Cache-Control: public, max-age=31536000, immutable
+# hash-busted filenames = permanent cache
+app.a1b2c3.css  200 OK      (first visit)
+app.a1b2c3.css  from cache  (subsequent)</code></pre>
+                    </div>
+                    <aside class="callout callout--good">
+                        <span class="callout__title"><i class="fa-solid fa-lightbulb" aria-hidden="true"></i> Why it matters</span>
+                        <p>Repeat visits become near-instant: the HTML round-trip is the only network cost. That's the fastest "performance optimization" there is.</p>
+                    </aside>
+                </article>
+            </div>
+
+            <!-- Lazy loading demo with IntersectionObserver -->
+            <div class="lazy-demo">
+                <div class="lazy-demo__head">
+                    <h3 class="comparison__title"><i class="fa-solid fa-eye" aria-hidden="true"></i> Lazy loading with <code>IntersectionObserver</code></h3>
+                    <p class="lazy-demo__status" data-lazy-status role="status" aria-live="polite">Loaded 0 / 8</p>
+                    <div class="lazy-demo__progress"><span data-lazy-progress></span></div>
+                    <button type="button" class="btn btn--ghost" data-lazy-reset><i class="fa-solid fa-rotate" aria-hidden="true"></i> Reset</button>
+                </div>
+                <p class="comparison__desc">
+                    Scroll down: cards "load" (skeleton → real thumbnail) only when they enter the viewport.
+                    Off-screen work is deferred — the browser never pays for what you can't see.
+                </p>
+                <div class="lazy-demo__grid" data-lazy-grid>
+                    <!-- Each card is populated when it intersects the viewport -->
+                    <article class="lazy-card" data-lazy data-g1="#6366f1" data-g2="#8b5cf6" data-icon="fa-solid fa-mountain-sun"><div class="lazy-card__thumb"><i class="fa-solid fa-image" aria-hidden="true"></i></div><div class="lazy-card__info"><h4 class="lazy-card__title">Alpine</h4><p class="lazy-card__meta">Mountains · 2048 × 1365</p></div></article>
+                    <article class="lazy-card" data-lazy data-g1="#0ea5e9" data-g2="#22d3ee" data-icon="fa-solid fa-water"><div class="lazy-card__thumb"><i class="fa-solid fa-image" aria-hidden="true"></i></div><div class="lazy-card__info"><h4 class="lazy-card__title">Coast</h4><p class="lazy-card__meta">Ocean · 2560 × 1440</p></div></article>
+                    <article class="lazy-card" data-lazy data-g1="#f59e0b" data-g2="#ef4444" data-icon="fa-solid fa-sun"><div class="lazy-card__thumb"><i class="fa-solid fa-image" aria-hidden="true"></i></div><div class="lazy-card__info"><h4 class="lazy-card__title">Desert</h4><p class="lazy-card__meta">Dunes · 1920 × 1080</p></div></article>
+                    <article class="lazy-card" data-lazy data-g1="#10b981" data-g2="#059669" data-icon="fa-solid fa-leaf"><div class="lazy-card__thumb"><i class="fa-solid fa-image" aria-hidden="true"></i></div><div class="lazy-card__info"><h4 class="lazy-card__title">Forest</h4><p class="lazy-card__meta">Canopy · 2400 × 1600</p></div></article>
+                    <article class="lazy-card" data-lazy data-g1="#64748b" data-g2="#334155" data-icon="fa-solid fa-city"><div class="lazy-card__thumb"><i class="fa-solid fa-image" aria-hidden="true"></i></div><div class="lazy-card__info"><h4 class="lazy-card__title">Metro</h4><p class="lazy-card__meta">Skyline · 2200 × 1400</p></div></article>
+                    <article class="lazy-card" data-lazy data-g1="#ec4899" data-g2="#f472b6" data-icon="fa-solid fa-feather"><div class="lazy-card__thumb"><i class="fa-solid fa-image" aria-hidden="true"></i></div><div class="lazy-card__info"><h4 class="lazy-card__title">Blossom</h4><p class="lazy-card__meta">Garden · 2000 × 1333</p></div></article>
+                    <article class="lazy-card" data-lazy data-g1="#f43f5e" data-g2="#fb7185" data-icon="fa-solid fa-volcano"><div class="lazy-card__thumb"><i class="fa-solid fa-image" aria-hidden="true"></i></div><div class="lazy-card__info"><h4 class="lazy-card__title">Cinder</h4><p class="lazy-card__meta">Volcano · 2100 × 1400</p></div></article>
+                    <article class="lazy-card" data-lazy data-g1="#a855f7" data-g2="#d946ef" data-icon="fa-solid fa-cloud-moon"><div class="lazy-card__thumb"><i class="fa-solid fa-image" aria-hidden="true"></i></div><div class="lazy-card__info"><h4 class="lazy-card__title">Nebula</h4><p class="lazy-card__meta">Night sky · 2560 × 1600</p></div></article>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <!-- ================================================================
+         FOOTER
+    ================================================================ -->
+    <footer class="page-footer shell">
+        <p><strong>Try this:</strong> open DevTools → Performance → record, then press each demo button. Watch the long tasks and reflows.</p>
+        <p>This page itself uses <code>content-visibility: auto</code>, <code>:has()</code>, <code>@supports</code>, CSS custom properties and <code>clamp()</code> — inspect it to see them in production.</p>
+        <p>Built as a self-contained educational tool — no build step, no dependencies beyond fonts &amp; icons.</p>
+    </footer>
+
+    <!-- Session render stats — floats bottom-right -->
+    <aside class="stats-panel" id="statsPanel" aria-label="Session rendering statistics">
+        <button type="button" class="stats-panel__toggle" data-stats-toggle aria-expanded="true">
+            <span><i class="fa-solid fa-chart-simple" aria-hidden="true"></i> Session render stats</span>
+            <i class="fa-solid fa-chevron-down" aria-hidden="true"></i>
+        </button>
+        <div class="stats-panel__body">
+            <h4>Counted via patched DOM APIs + PerformanceObserver</h4>
+            <div class="stat"><span class="stat__label">Layout reads (forced)</span><span class="stat__value" data-stat="reads">0</span></div>
+            <div class="stat"><span class="stat__label">Style writes</span><span class="stat__value" data-stat="writes">0</span></div>
+            <div class="stat"><span class="stat__label">Long tasks (&gt;50ms)</span><span class="stat__value" data-stat="longtasks">0</span></div>
+            <div class="stat"><span class="stat__label">Layout shifts (CLS)</span><span class="stat__value" data-stat="shifts">0</span></div>
+        </div>
+    </aside>
+
+    <script>
+        'use strict';
+        /* ================================================================
+           RENDERING DEMO — main script.
+           Every trick below is commented because the HOW is the lesson.
+        ================================================================ */
+
+        /* ----------------------------------------------------------------
+           THEME TOGGLE — one data attribute drives the whole palette.
+        ---------------------------------------------------------------- */
+        const themeToggle = document.getElementById('themeToggle');
+        const themeToggleLabel = document.getElementById('themeToggleLabel');
+
+        function applyTheme(theme) {
+            document.documentElement.dataset.theme = theme;
+            const dark = theme === 'dark';
+            themeToggle.setAttribute('aria-pressed', String(dark));
+            themeToggleLabel.textContent = dark ? 'Light' : 'Dark';
+            try { localStorage.setItem('csrd-theme', theme); } catch (_) { /* private mode */ }
+        }
+
+        // Initial theme: stored preference → OS preference → light.
+        let storedTheme = null;
+        try { storedTheme = localStorage.getItem('csrd-theme'); } catch (_) { /* ignore */ }
+        applyTheme(storedTheme || (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'));
+
+        themeToggle.addEventListener('click', () => {
+            applyTheme(document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark');
+        });
+
+        document.getElementById('resetBtn').addEventListener('click', () => location.reload());
+
+        /* ----------------------------------------------------------------
+           CODE HIGHLIGHTER — tiny, dependency-free.
+           Reads the raw text of each <pre><code>, tokenizes it into
+           <span class="tok--..."> for the CSS-based highlighting above.
+        ---------------------------------------------------------------- */
+        function escapeHtml(s) {
+            return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+        }
+
+        // CSS-ish highlighter: per-line — comment | selector{ | prop: value
+        function highlightCSS(src) {
+            return src.split('\n').map((line) => {
+                const t = line.trim();
+                if (!t) return '';
+                if (t.startsWith('/*') || t.startsWith('#')) {
+                    return '<span class="tok tok--comment">' + escapeHtml(line) + '</span>';
+                }
+                if (t === '{' || t === '}') {
+                    return '<span class="tok tok--punct">' + t + '</span>';
+                }
+                if (t.endsWith('{') || t.endsWith('}')) {
+                    const m = line.match(/^(.*?)([{}])$/);
+                    if (m) {
+                        return '<span class="tok tok--selector">' + escapeHtml(m[1]) + '</span>' +
+                               '<span class="tok tok--punct">' + m[2] + '</span>';
+                    }
+                }
+                const colon = line.indexOf(':');
+                if (colon > -1) {
+                    const ws = (line.match(/^\s*/) || [''])[0];
+                    const prop = line.slice(0, colon);
+                    const val = line.slice(colon + 1);
+                    return ws +
+                        '<span class="tok tok--property">' + escapeHtml(prop) + '</span>' +
+                        '<span class="tok tok--punct">:</span>' +
+                        '<span class="tok tok--value">' + escapeHtml(val) + '</span>';
+                }
+                return escapeHtml(line);
+            }).join('\n');
+        }
+
+        // JS-ish highlighter: comments, strings, keywords, numbers.
+        function highlightJS(src) {
+            return src.split('\n').map((line) => {
+                if (line.trim().startsWith('//')) {
+                    return '<span class="tok tok--comment">' + escapeHtml(line) + '</span>';
+                }
+                let out = escapeHtml(line).replace(/("[^"]*"|'[^']*'|`[^`]*`)/g,
+                    (m) => '<span class="tok tok--string">' + m + '</span>');
+                out = out.replace(/\b(const|let|var|function|return|if|else|for|of|in|while|new|true|false|null|this)\b/g,
+                    '<span class="tok tok--keyword">$1</span>');
+                out = out.replace(/\b(\d+(?:\.\d+)?)\b/g, '<span class="tok tok--number">$1</span>');
+                return out;
+            }).join('\n');
+        }
+
+        document.querySelectorAll('.code-block').forEach((block) => {
+            const code = block.querySelector('code');
+            if (!code) return;
+            const lang = block.dataset.lang || 'css';
+            const src = code.textContent;
+            code.innerHTML = lang === 'js' ? highlightJS(src) : highlightCSS(src);
+        });
+
+        /* ----------------------------------------------------------------
+           RENDER STATS COUNTERS.
+           Patch layout getters (offsetTop, clientWidth, getBoundingClientRect…)
+           and layout style setters so EVERY read/write is counted.
+           This is instrumentation for education — not something you'd ship.
+        ---------------------------------------------------------------- */
+        const sessionStats = { reads: 0, writes: 0, longTasks: 0, layoutShifts: 0 };
+        let counting = null; // local counter active only inside a measured demo
+
+        function startCounting() { counting = { reads: 0, writes: 0 }; return counting; }
+        function stopCounting() { const c = counting; counting = null; return c; }
+
+        (function installCounters() {
+            // Reads that force layout
+            const layoutGetters = [
+                'offsetTop', 'offsetLeft', 'offsetWidth', 'offsetHeight',
+                'clientTop', 'clientLeft', 'clientWidth', 'clientHeight',
+                'scrollTop', 'scrollLeft', 'scrollWidth', 'scrollHeight'
+            ];
+            layoutGetters.forEach((prop) => {
+                try {
+                    const desc = Object.getOwnPropertyDescriptor(HTMLElement.prototype, prop);
+                    if (!desc || !desc.get) return;
+                    Object.defineProperty(HTMLElement.prototype, prop, {
+                        configurable: true,
+                        get() {
+                            sessionStats.reads++;
+                            if (counting) counting.reads++;
+                            return desc.get.call(this);
+                        }
+                    });
+                } catch (_) { /* older engines */ }
+            });
+
+            // getBoundingClientRect / getClientRects are methods
+            ['getBoundingClientRect', 'getClientRects'].forEach((name) => {
+                try {
+                    const orig = Element.prototype[name];
+                    Element.prototype[name] = function (...args) {
+                        sessionStats.reads++;
+                        if (counting) counting.reads++;
+                        return orig.apply(this, args);
+                    };
+                } catch (_) { /* ignore */ }
+            });
+
+            // Writes that invalidate layout (the ones that trigger reflow on next read).
+            // Implemented via setProperty()/getPropertyValue() instead of relying on
+            // engine-specific prototype accessors — works across Blink/WebKit/Gecko.
+            const layoutProps = [
+                'left', 'top', 'right', 'bottom', 'width', 'height',
+                'marginTop', 'marginRight', 'marginBottom', 'marginLeft',
+                'paddingTop', 'paddingRight', 'paddingBottom', 'paddingLeft',
+                'fontSize', 'display', 'position'
+            ];
+            layoutProps.forEach((prop) => {
+                try {
+                    Object.defineProperty(CSSStyleDeclaration.prototype, prop, {
+                        configurable: true,
+                        enumerable: false,
+                        get() {
+                            return this.getPropertyValue(prop);
+                        },
+                        set(v) {
+                            sessionStats.writes++;
+                            if (counting) counting.writes++;
+                            this.setProperty(prop, v);
+                        }
+                    });
+                } catch (_) { /* ignore */ }
+            });
+
+            // Also count batch writes via cssText / setProperty
+            try {
+                const origCssText = Object.getOwnPropertyDescriptor(CSSStyleDeclaration.prototype, 'cssText');
+                if (origCssText && origCssText.set) {
+                    Object.defineProperty(CSSStyleDeclaration.prototype, 'cssText', {
+                        configurable: true,
+                        get: origCssText.get,
+                        set(v) {
+                            sessionStats.writes++;
+                            if (counting) counting.writes++;
+                            origCssText.set.call(this, v);
+                        }
+                    });
+                }
+            } catch (_) { /* ignore */ }
+        })();
+
+        // Long tasks + layout shifts via the Performance API (where supported)
+        try {
+            new PerformanceObserver((list) => {
+                list.getEntries().forEach(() => sessionStats.longTasks++);
+            }).observe({ entryTypes: ['longtask'] });
+        } catch (_) { /* not supported */ }
+        try {
+            new PerformanceObserver((list) => {
+                list.getEntries().forEach((en) => { if (!en.hadRecentInput) sessionStats.layoutShifts++; });
+            }).observe({ type: 'layout-shift', buffered: true });
+        } catch (_) { /* not supported */ }
+
+        // Stats panel live update + collapse toggle
+        const statsPanel = document.getElementById('statsPanel');
+        const statEls = {
+            reads: statsPanel.querySelector('[data-stat="reads"]'),
+            writes: statsPanel.querySelector('[data-stat="writes"]'),
+            longtasks: statsPanel.querySelector('[data-stat="longtasks"]'),
+            shifts: statsPanel.querySelector('[data-stat="shifts"]')
+        };
+        statsPanel.querySelector('[data-stats-toggle]').addEventListener('click', (e) => {
+            const collapsed = statsPanel.classList.toggle('is-collapsed');
+            e.currentTarget.setAttribute('aria-expanded', String(!collapsed));
+        });
+        setInterval(() => {
+            statEls.reads.textContent = sessionStats.reads;
+            statEls.writes.textContent = sessionStats.writes;
+            statEls.longtasks.textContent = sessionStats.longTasks;
+            statEls.shifts.textContent = sessionStats.layoutShifts;
+            // Alert styling when long tasks appear — the panel's :has() rule reacts
+            statEls.longtasks.classList.toggle('stat--alert', sessionStats.longTasks > 0);
+        }, 600);
+
+        /* ----------------------------------------------------------------
+           SECTION 1 — PRODUCT DATA (shared, so both sides are identical).
+           Grid cards + table rows are generated once, in one fragment each.
+        ---------------------------------------------------------------- */
+        const PRODUCTS = [
+            { name: 'Aurora Headphones', price: '$129', rating: 4.8, tag: 'Audio', icon: 'fa-solid fa-headphones', hot: true },
+            { name: 'Pulse Watch',       price: '$199', rating: 4.6, tag: 'Wearables', icon: 'fa-solid fa-stopwatch' },
+            { name: 'Lens Pro Camera',   price: '$649', rating: 4.9, tag: 'Photography', icon: 'fa-solid fa-camera' },
+            { name: 'Volt Gamepad',      price: '$59',  rating: 4.4, tag: 'Gaming', icon: 'fa-solid fa-gamepad' },
+            { name: 'Mech Keyboard',     price: '$119', rating: 4.7, tag: 'Accessories', icon: 'fa-solid fa-keyboard' },
+            { name: 'Nova Speaker',      price: '$89',  rating: 4.5, tag: 'Audio', icon: 'fa-solid fa-volume-high' }
+        ];
+
+        function starsFor(rating) {
+            let out = '';
+            for (let i = 1; i <= 5; i++) {
+                const cls = i <= Math.floor(rating) ? 'fa-solid fa-star'
+                    : (i - rating <= 0.5 ? 'fa-solid fa-star-half-stroke' : 'fa-regular fa-star');
+                out += '<i class="' + cls + '" aria-hidden="true"></i>';
+            }
+            return out;
+        }
+
+        function buildProducts() {
+            const grid = document.querySelector('.product-grid');
+            const tbody = document.querySelector('.product-table__body');
+            if (!grid || !tbody) return;
+
+            // Cards — built in a fragment so insertion costs ONE layout pass
+            const cardsFrag = document.createDocumentFragment();
+            PRODUCTS.forEach((p) => {
+                const card = document.createElement('article');
+                card.className = 'product-card';
+                card.innerHTML =
+                    '<div class="product-card__media" role="img" aria-label="' + escapeHtml(p.name) + ' product image">' +
+                        '<i class="' + p.icon + '" aria-hidden="true"></i>' +
+                    '</div>' +
+                    '<div class="product-card__body">' +
+                        '<span class="product-card__tag' + (p.hot ? ' product-card__tag--hot' : '') + '">' + escapeHtml(p.tag) + '</span>' +
+                        '<h4 class="product-card__title">' + escapeHtml(p.name) + '</h4>' +
+                        '<span class="product-card__rating" aria-label="Rating ' + p.rating + ' out of 5">' + starsFor(p.rating) + ' ' + p.rating + '</span>' +
+                        '<div class="product-card__footer">' +
+                            '<span class="product-card__price">' + escapeHtml(p.price) + '</span>' +
+                            '<button type="button" class="product-card__btn">Add to cart</button>' +
+                        '</div>' +
+                    '</div>';
+                cardsFrag.appendChild(card);
+
+                // Table rows
+                const tr = document.createElement('tr');
+                const nameTd = document.createElement('td');
+                nameTd.className = 'product-table__name';
+                nameTd.textContent = p.name;
+                const priceTd = document.createElement('td');
+                priceTd.textContent = p.price;
+                const ratingTd = document.createElement('td');
+                ratingTd.className = 'product-table__rating';
+                ratingTd.textContent = '★ ' + p.rating.toFixed(1);
+                tr.append(nameTd, priceTd, ratingTd);
+                tbody.appendChild(tr);
+            });
+            grid.appendChild(cardsFrag);
+        }
+        buildProducts();
+
+        /* ----------------------------------------------------------------
+           SECTION 2 — ResizeObserver drives the viewport readouts.
+           RO fires on SIZE changes — notice it never fires for the BAD
+           animation's positional movement (that's the lesson).
+        ---------------------------------------------------------------- */
+        const ro = new ResizeObserver((entries) => {
+            entries.forEach((en) => {
+                const frame = en.target.closest('[data-frame]');
+                if (!frame) return;
+                const w = Math.round(en.contentRect.width);
+                const sizeEl = frame.querySelector('[data-size]');
+                const bpEl = frame.querySelector('[data-bp]');
+                if (sizeEl) sizeEl.textContent = w + ' px';
+                if (bpEl) {
+                    const label = w >= 960 ? 'desktop' : w >= 640 ? 'tablet' : 'mobile';
+                    bpEl.textContent = label;
+                    bpEl.dataset.bp = label;
+                }
+                // Show the "clipped" warning when the fixed-width nav can't fit
+                const note = frame.querySelector('[data-overflow]');
+                if (note) note.hidden = w >= 720;
+            });
+        });
+        document.querySelectorAll('[data-frame]').forEach((f) => {
+            const vp = f.querySelector('[data-viewport]');
+            if (vp) ro.observe(vp);
+        });
+
+        /* ----------------------------------------------------------------
+           SECTION 3 — ANIMATIONS + FPS METERS.
+           Both loops run on requestAnimationFrame. The BAD loop writes
+           left/top and reads offsetLeft (forced reflow). The GOOD loop
+           writes transform/opacity and reads nothing.
+        ---------------------------------------------------------------- */
+        class Meter {
+            constructor(root) {
+                this.root = root;
+                this.fpsEl = root.querySelector('[data-meter="fps"]');
+                this.frameEl = root.querySelector('[data-meter="frame"]');
+                this.opsEl = root.querySelector('[data-meter="ops"]');
+                this.shiftsEl = root.querySelector('[data-meter="shifts"]');
+                this.roEl = root.querySelector('[data-meter="ro"]');
+                this.barEl = root.querySelector('[data-meter="bar"]');
+                this.frames = 0;
+                this.last = performance.now();
+                this.ema = 0;
+            }
+            // Called once per animation frame.
+            tick(frameMs, ops, shifts) {
+                this.frames++;
+                this.ema = this.ema ? this.ema * 0.8 + frameMs * 0.2 : frameMs;
+                const now = performance.now();
+                const dt = now - this.last;
+                // Resume guard: after a long pause (e.g. user resumed the
+                // animation), don't let stale wall-clock time skew the FPS.
+                if (dt > 1000) { this.frames = 0; this.last = now; }
+                if (dt >= 500) {
+                    const fps = Math.min(60, Math.round((this.frames * 1000) / dt));
+                    this.frames = 0;
+                    this.last = now;
+                    if (this.fpsEl) this.fpsEl.textContent = fps;
+                    if (this.frameEl) this.frameEl.textContent = this.ema.toFixed(2) + ' ms';
+                    if (this.opsEl) this.opsEl.textContent = ops;
+                    if (this.shiftsEl) this.shiftsEl.textContent = shifts;
+                    if (this.barEl) {
+                        this.barEl.style.width = Math.min(100, (fps / 60) * 100) + '%';
+                        this.barEl.classList.toggle('is-low', fps < 45);
+                    }
+                }
+            }
+        }
+
+        const animState = { bad: true, good: true };
+        const badHolder = document.querySelector('[data-anim="bad"]');
+        const goodHolder = document.querySelector('[data-anim="good"]');
+        const badMeter = new Meter(document.querySelector('.anim-meter'));
+        const goodMeterEl = document.querySelectorAll('.anim-meter')[1];
+        const goodMeter = new Meter(goodMeterEl);
+
+        // Reduced motion: respect it — don't auto-play.
+        const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
+        if (reducedMotion) { animState.bad = false; animState.good = false; }
+
+        // ResizeObserver on the BAD box: position changes are invisible to it.
+        let badRoFires = 0;
+        try {
+            new ResizeObserver(() => { badRoFires++; }).observe(badHolder);
+        } catch (_) { /* ignore */ }
+
+        let badAngle = 0, goodAngle = 0, badShifts = 0, lastX = 0, lastY = 0, badReads = 0;
+
+        function badLoop() {
+            if (!animState.bad) return;
+            const t0 = performance.now();
+
+            badAngle = (badAngle + 2) % 360;
+            const rad = (badAngle * Math.PI) / 180;
+            const x = Math.cos(rad) * 60;
+            const y = Math.sin(rad) * 45;
+
+            // BAD: layout-affecting writes…
+            badHolder.style.left = (70 + x) + 'px';
+            badHolder.style.top = (58 + y) + 'px';
+            // …followed by a forced synchronous read (layout thrash every frame).
+            void badHolder.offsetLeft;
+            badReads++;
+
+            // Shift detection via a rect read (itself a forced reflow — on theme!)
+            const r = badHolder.getBoundingClientRect();
+            if (Math.abs(r.x - lastX) + Math.abs(r.y - lastY) > 1) badShifts++;
+            lastX = r.x; lastY = r.y;
+
+            badMeter.tick(performance.now() - t0, badReads, badShifts);
+            if (badMeter.roEl) badMeter.roEl.textContent = badRoFires;
+
+            requestAnimationFrame(badLoop);
+        }
+
+        function goodLoop() {
+            if (!animState.good) return;
+            const t0 = performance.now();
+
+            goodAngle = (goodAngle + 2) % 360;
+            const rad = (goodAngle * Math.PI) / 180;
+            const x = Math.cos(rad) * 60;
+            const y = Math.sin(rad) * 45;
+
+            // GOOD: compositor-only writes, zero reads.
+            goodHolder.style.transform = 'translate3d(' + (70 + x) + 'px,' + (58 + y) + 'px,0)';
+            goodHolder.style.opacity = 0.7 + 0.3 * Math.abs(Math.sin(rad));
+
+            goodMeter.tick(performance.now() - t0, 0, 0);
+            requestAnimationFrame(goodLoop);
+        }
+
+        // Play/pause buttons
+        document.querySelectorAll('[data-toggle-anim]').forEach((btn) => {
+            btn.addEventListener('click', () => {
+                const which = btn.dataset.toggleAnim; // 'bad' | 'good'
+                animState[which] = !animState[which];
+                const label = btn.querySelector('[data-label]');
+                const icon = btn.querySelector('i');
+                if (animState[which]) {
+                    label.textContent = 'Pause';
+                    icon.className = 'fa-solid fa-pause';
+                    requestAnimationFrame(which === 'bad' ? badLoop : goodLoop);
+                } else {
+                    label.textContent = 'Play';
+                    icon.className = 'fa-solid fa-play';
+                }
+            });
+        });
+
+        if (!reducedMotion) {
+            requestAnimationFrame(badLoop);
+            requestAnimationFrame(goodLoop);
+        }
+
+        /* ----------------------------------------------------------------
+           SECTION 4 — DOM MANIPULATION + LAYOUT THRASHING
+        ---------------------------------------------------------------- */
+        function buildList(ul, count) {
+            // Always build via fragment — even "initial" population should be batched.
+            const frag = document.createDocumentFragment();
+            for (let i = 0; i < count; i++) {
+                const li = document.createElement('li');
+                li.className = 'list-demo__item';
+                li.innerHTML = '<span class="list-demo__dot"></span>Item ' + (i + 1);
+                frag.appendChild(li);
+            }
+            ul.appendChild(frag);
+        }
+
+        const badList = document.querySelector('[data-list="bad"]');
+        const goodList = document.querySelector('[data-list="good"]');
+        buildList(badList, 100);
+        buildList(goodList, 100);
+
+        function updateResult(el, ms, stats, note) {
+            el.innerHTML = note +
+                ' <strong>' + ms.toFixed(1) + ' ms</strong>' +
+                ' · ' + stats.reads + ' forced reads · ' + stats.writes + ' writes';
+        }
+
+        document.querySelector('[data-add="bad"]').addEventListener('click', () => {
+            const start = badList.children.length;
+            startCounting();
+            performance.mark('dom-bad-start');
+            const t0 = performance.now();
+            for (let i = 0; i < 100; i++) {
+                const li = document.createElement('li');
+                li.className = 'list-demo__item';
+                li.innerHTML = '<span class="list-demo__dot"></span>Item ' + (start + i + 1);
+                badList.appendChild(li);      // invalidates layout every iteration
+                void badList.offsetHeight;    // …and pays for it immediately
+            }
+            performance.mark('dom-bad-end');
+            performance.measure('DOM bad batch', 'dom-bad-start', 'dom-bad-end');
+            const ms = performance.now() - t0;
+            const stats = stopCounting();
+            updateResult(document.querySelector('[data-result="bad"]'), ms, stats,
+                'BAD: appended one-by-one →');
+        });
+
+        document.querySelector('[data-add="good"]').addEventListener('click', () => {
+            const start = goodList.children.length;
+            startCounting();
+            performance.mark('dom-good-start');
+            const t0 = performance.now();
+            const frag = document.createDocumentFragment();
+            for (let i = 0; i < 100; i++) {
+                const li = document.createElement('li');
+                li.className = 'list-demo__item list-demo__item--new';
+                li.innerHTML = '<span class="list-demo__dot"></span>Item ' + (start + i + 1);
+                frag.appendChild(li);         // zero layout work off-DOM
+            }
+            goodList.appendChild(frag);       // ONE reflow, ONE paint pass
+            performance.mark('dom-good-end');
+            performance.measure('DOM good batch', 'dom-good-start', 'dom-good-end');
+            const ms = performance.now() - t0;
+            const stats = stopCounting();
+            updateResult(document.querySelector('[data-result="good"]'), ms, stats,
+                'GOOD: fragment batch →');
+        });
+
+        // Layout thrashing: read-write ping-pong vs batched reads.
+        document.querySelectorAll('[data-thrash]').forEach((btn) => {
+            btn.addEventListener('click', () => {
+                const kind = btn.dataset.thrash; // 'bad' | 'good'
+                const box = document.querySelector('[data-thrash-box]');
+                const out = document.querySelector('[data-thrash-result]');
+                startCounting();
+                const t0 = performance.now();
+
+                if (kind === 'bad') {
+                    // Interleave read + write 400× — each read is a forced reflow
+                    for (let i = 0; i < 400; i++) {
+                        const w = box.offsetWidth;
+                        box.style.width = ((w % 160) + 20 + (i % 40)) + 'px';
+                    }
+                } else {
+                    // Batch: one read, compute all values, then write
+                    const w = box.offsetWidth;
+                    const widths = [];
+                    for (let i = 0; i < 400; i++) widths.push(((w % 160) + 20 + (i % 40)) + 'px');
+                    for (let i = 0; i < 400; i++) box.style.width = widths[i];
+                }
+
+                const ms = performance.now() - t0;
+                const stats = stopCounting();
+                out.innerHTML = (kind === 'bad' ? 'BAD' : 'GOOD') +
+                    ' loop: <strong>' + ms.toFixed(1) + ' ms</strong>' +
+                    ' · ' + stats.reads + ' forced reads · ' + stats.writes + ' writes';
+            });
+        });
+
+        /* ----------------------------------------------------------------
+           SECTION 5 — LAZY LOADING VIA IntersectionObserver.
+           Cards are skeletons until they enter the viewport; then we
+           "load" them (fill the thumbnail), and stop observing.
+        ---------------------------------------------------------------- */
+        function initLazy() {
+            const grid = document.querySelector('[data-lazy-grid]');
+            const status = document.querySelector('[data-lazy-status]');
+            const progress = document.querySelector('[data-lazy-progress]');
+            const cards = Array.from(grid.querySelectorAll('[data-lazy]'));
+            let loaded = 0;
+            const total = cards.length;
+
+            const update = () => {
+                status.textContent = 'Loaded ' + loaded + ' / ' + total;
+                progress.style.width = Math.round((loaded / total) * 100) + '%';
+            };
+
+            const observer = new IntersectionObserver((entries) => {
+                entries.forEach((entry) => {
+                    if (!entry.isIntersecting) return;
+                    const card = entry.target;
+                    // "Load" the asset: swap skeleton for a real-looking thumbnail
+                    const thumb = card.querySelector('.lazy-card__thumb');
+                    thumb.style.background = 'linear-gradient(135deg, ' + card.dataset.g1 + ', ' + card.dataset.g2 + ')';
+                    const icon = thumb.querySelector('i');
+                    if (icon) icon.className = card.dataset.icon;
+                    card.classList.add('is-loaded');
+                    loaded++;
+                    update();
+                    observer.unobserve(card); // one-time load, stop watching
+                });
+            }, { rootMargin: '0px 0px -8% 0px', threshold: 0.2 });
+
+            cards.forEach((card) => observer.observe(card));
+            update();
+        }
+        initLazy();
+
+        document.querySelector('[data-lazy-reset]').addEventListener('click', () => {
+            // Simplest robust reset: reload (clears counters & observers too).
+            location.reload();
+        });
+
+        console.log('%c🚀 CSS & Browser Rendering Demo loaded', 'font-weight:bold;font-size:14px');
+        console.log('Watch the bottom-right stats panel — every forced layout read is counted.');
+    </script>
+</body>
+</html>

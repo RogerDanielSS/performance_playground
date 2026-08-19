@@ -1,0 +1,1085 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Performance Playground — CSS & Browser Good vs Bad</title>
+
+    <!-- ============================================================
+    STYLES
+    ============================================================ -->
+    <style>
+        /* ---------- RESET & BASE ---------- */
+        *,
+        *::before,
+        *::after {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        :root {
+            --bg: #0f1117;
+            --surface: #1a1d27;
+            --surface-hover: #252a38;
+            --border: #2d3348;
+            --text: #e8edf5;
+            --text-dim: #8892a8;
+            --bad: #e74c3c;
+            --bad-bg: #2c1815;
+            --bad-border: #5c2a22;
+            --good: #2ecc71;
+            --good-bg: #152b1f;
+            --good-border: #1f4a33;
+            --accent: #64b5f6;
+            --radius: 12px;
+            --shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+            --font: 'Segoe UI', system-ui, -apple-system, sans-serif;
+            --transition: 0.25s ease;
+        }
+
+        html {
+            scroll-behavior: smooth;
+        }
+
+        body {
+            font-family: var(--font);
+            background: var(--bg);
+            color: var(--text);
+            padding: 20px;
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: flex-start;
+        }
+
+        /* ---------- LAYOUT ---------- */
+        .app {
+            max-width: 1440px;
+            width: 100%;
+        }
+
+        /* ---------- HEADER ---------- */
+        .header {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: space-between;
+            align-items: center;
+            padding: 16px 24px;
+            background: var(--surface);
+            border-radius: var(--radius);
+            border: 1px solid var(--border);
+            margin-bottom: 24px;
+        }
+
+        .header h1 {
+            font-size: clamp(1.2rem, 2.5vw, 1.8rem);
+            font-weight: 700;
+            background: linear-gradient(135deg, var(--bad), var(--good));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .header-sub {
+            font-size: 0.85rem;
+            color: var(--text-dim);
+        }
+
+        /* ---------- METRICS BAR ---------- */
+        .metrics {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+            gap: 12px;
+            padding: 16px 20px;
+            background: var(--surface);
+            border-radius: var(--radius);
+            border: 1px solid var(--border);
+            margin-bottom: 24px;
+        }
+
+        .metric {
+            text-align: center;
+        }
+
+        .metric .label {
+            font-size: 0.65rem;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            color: var(--text-dim);
+        }
+
+        .metric .value {
+            font-size: 1.4rem;
+            font-weight: 700;
+            font-variant-numeric: tabular-nums;
+        }
+
+        .metric .value.bad-val {
+            color: var(--bad);
+        }
+        .metric .value.good-val {
+            color: var(--good);
+        }
+        .metric .value.neutral-val {
+            color: var(--accent);
+        }
+
+        /* ---------- COLUMNS ---------- */
+        .columns {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 24px;
+            margin-bottom: 24px;
+        }
+
+        @media (max-width: 820px) {
+            .columns {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        .column {
+            background: var(--surface);
+            border-radius: var(--radius);
+            border: 1px solid var(--border);
+            padding: 20px;
+            transition: border-color var(--transition);
+        }
+
+        .column-bad {
+            border-color: var(--bad-border);
+        }
+        .column-bad .col-header {
+            color: var(--bad);
+        }
+
+        .column-good {
+            border-color: var(--good-border);
+        }
+        .column-good .col-header {
+            color: var(--good);
+        }
+
+        .col-header {
+            font-size: 1.1rem;
+            font-weight: 600;
+            letter-spacing: 0.02em;
+            margin-bottom: 16px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            border-bottom: 1px solid var(--border);
+            padding-bottom: 10px;
+        }
+
+        .col-header .badge {
+            font-size: 0.6rem;
+            text-transform: uppercase;
+            background: var(--bad);
+            color: #fff;
+            padding: 2px 10px;
+            border-radius: 20px;
+        }
+        .col-header .badge.good-badge {
+            background: var(--good);
+        }
+
+        /* ---------- CARDS ---------- */
+        .card {
+            background: var(--bg);
+            border-radius: 10px;
+            padding: 16px 18px;
+            margin-bottom: 16px;
+            border-left: 4px solid var(--border);
+            transition: border-color var(--transition);
+        }
+
+        .card-bad {
+            border-left-color: var(--bad);
+        }
+        .card-good {
+            border-left-color: var(--good);
+        }
+
+        .card-title {
+            font-weight: 600;
+            font-size: 0.9rem;
+            margin-bottom: 6px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .card-desc {
+            font-size: 0.8rem;
+            color: var(--text-dim);
+            margin-bottom: 12px;
+            line-height: 1.5;
+        }
+
+        .card-desc code {
+            background: var(--surface);
+            padding: 1px 6px;
+            border-radius: 4px;
+            font-size: 0.75rem;
+            color: var(--accent);
+            font-family: 'Fira Code', 'Consolas', monospace;
+        }
+
+        /* ---------- DEMO BOXES ---------- */
+        .demo-area {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 12px;
+            align-items: center;
+            min-height: 60px;
+            padding: 8px 0;
+        }
+
+        .box {
+            width: 60px;
+            height: 60px;
+            border-radius: 8px;
+            background: var(--accent);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.6rem;
+            font-weight: 600;
+            color: #fff;
+            transition: var(--transition);
+            flex-shrink: 0;
+        }
+
+        .box-sm {
+            width: 40px;
+            height: 40px;
+            font-size: 0.5rem;
+        }
+
+        /* ---- BAD: float layout ---- */
+        .float-container {
+            overflow: hidden;
+            display: block;
+            /* clearfix */;
+        }
+        .float-container .float-item {
+            float: left;
+            width: 80px;
+            height: 60px;
+            margin-right: 12px;
+            margin-bottom: 12px;
+            background: var(--bad);
+            border-radius: 6px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.6rem;
+            color: #fff;
+        }
+        .float-container::after {
+            content: '';
+            display: table;
+            clear: both;
+        }
+
+        /* ---- GOOD: flex layout ---- */
+        .flex-container {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 12px;
+        }
+        .flex-container .flex-item {
+            flex: 1 1 80px;
+            min-width: 60px;
+            height: 60px;
+            background: var(--good);
+            border-radius: 6px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.6rem;
+            color: #fff;
+        }
+
+        /* ---- Animation boxes ---- */
+        .anim-box {
+            width: 60px;
+            height: 60px;
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.55rem;
+            font-weight: 600;
+            color: #fff;
+            flex-shrink: 0;
+        }
+        .anim-box-bad {
+            background: var(--bad);
+            position: relative;
+            /* left will be animated via JS — BAD */;
+        }
+        .anim-box-good {
+            background: var(--good);
+            will-change: transform;
+            /* transform animated — GOOD */;
+        }
+
+        /* ---- Hover effects ---- */
+        .hover-bad {
+            background: var(--bad);
+            transition: width 0.3s ease, height 0.3s ease;
+            /* BAD: triggers reflow */;
+        }
+        .hover-bad:hover {
+            width: 80px;
+            height: 80px;
+        }
+
+        .hover-good {
+            background: var(--good);
+            transition: transform 0.3s ease;
+            will-change: transform;
+            /* GOOD: composite only */;
+        }
+        .hover-good:hover {
+            transform: scale(1.25);
+        }
+
+        /* ---- Display vs Visibility ---- */
+        .toggle-box {
+            width: 60px;
+            height: 60px;
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.5rem;
+            color: #fff;
+            font-weight: 600;
+        }
+        .toggle-bad {
+            background: var(--bad);
+        }
+        .toggle-good {
+            background: var(--good);
+        }
+        .toggle-good.hidden-vis {
+            visibility: hidden;
+            /* preserves layout */;
+        }
+        .toggle-bad.hidden-display {
+            display: none;
+            /* triggers reflow */;
+        }
+
+        /* ---- Image demo ---- */
+        .img-demo {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 16px;
+            align-items: flex-start;
+        }
+
+        .img-demo figure {
+            flex: 1 1 140px;
+            min-width: 100px;
+        }
+/* 
+        .img-demo img {
+            width: 100%;
+            height: auto;
+            border-radius: 6px;
+            border: 1px solid var(--border);
+        } */
+
+        /* Bad image — no width/height, no lazy, huge file */
+        .img-bad {
+            /* no width/height attributes — causes CLS */;
+        }
+
+        /* Good image — has width/height, lazy, srcset */
+        .img-good {
+            width: 100%;
+            height: auto;
+            aspect-ratio: 16/9;
+            object-fit: cover;
+        }
+
+        /* ---- Selector demo ---- */
+        .selector-demo {
+            font-size: 0.75rem;
+            font-family: 'Fira Code', 'Consolas', monospace;
+            background: var(--bg);
+            padding: 12px 14px;
+            border-radius: 6px;
+            overflow-x: auto;
+            white-space: pre-wrap;
+            word-break: break-all;
+        }
+
+        .selector-demo .bad-selector {
+            color: var(--bad);
+        }
+        .selector-demo .good-selector {
+            color: var(--good);
+        }
+
+        /* ---------- BUTTONS ---------- */
+        .btn {
+            padding: 6px 16px;
+            border: none;
+            border-radius: 6px;
+            font-weight: 600;
+            font-size: 0.75rem;
+            cursor: pointer;
+            transition: background var(--transition), transform var(--transition);
+            background: var(--surface-hover);
+            color: var(--text);
+            border: 1px solid var(--border);
+        }
+
+        .btn:hover {
+            transform: scale(1.04);
+        }
+        .btn:active {
+            transform: scale(0.96);
+        }
+
+        .btn-bad {
+            background: var(--bad);
+            border-color: var(--bad);
+            color: #fff;
+        }
+        .btn-bad:hover {
+            background: #c0392b;
+        }
+
+        .btn-good {
+            background: var(--good);
+            border-color: var(--good);
+            color: #fff;
+        }
+        .btn-good:hover {
+            background: #27ae60;
+        }
+
+        .btn-reset {
+            background: var(--surface-hover);
+            border-color: var(--border);
+        }
+
+        /* ---------- TOOLTIP ---------- */
+        .tip {
+            font-size: 0.7rem;
+            color: var(--text-dim);
+            background: var(--surface);
+            padding: 6px 10px;
+            border-radius: 6px;
+            display: inline-block;
+            margin-top: 6px;
+            border-left: 2px solid var(--accent);
+        }
+
+        .tip strong {
+            color: var(--text);
+        }
+
+        /* ---------- RESPONSIVE ---------- */
+        @media (max-width: 480px) {
+            .metrics {
+                grid-template-columns: 1fr 1fr;
+                gap: 8px;
+                padding: 12px;
+            }
+            .metric .value {
+                font-size: 1.1rem;
+            }
+            .header {
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 8px;
+            }
+            .box {
+                width: 48px;
+                height: 48px;
+            }
+        }
+
+        /* ---------- UTILITY ---------- */
+        .mt-8 {
+            margin-top: 8px;
+        }
+        .flex-row {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            gap: 12px;
+        }
+        .gap-8 {
+            gap: 8px;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="app">
+
+        <!-- ============================================================
+        HEADER
+        ============================================================ -->
+        <header class="header">
+            <div>
+                <h1>⚡ Performance Playground</h1>
+                <span class="header-sub">CSS &amp; Browser Rendering — Good vs Bad</span>
+            </div>
+            <div style="display:flex; gap:10px; flex-wrap:wrap;">
+                <button class="btn btn-reset" onclick="resetAll()">🔄 Reset</button>
+                <button class="btn" onclick="toggleTheme()" style="background:var(--surface-hover);">🌓 Theme</button>
+            </div>
+        </header>
+
+        <!-- ============================================================
+        METRICS BAR
+        ============================================================ -->
+        <section class="metrics" id="metricsBar">
+            <div class="metric">
+                <div class="label">🔴 Reflows</div>
+                <div class="value bad-val" id="reflowCount">0</div>
+            </div>
+            <div class="metric">
+                <div class="label">🟢 Repaints</div>
+                <div class="value good-val" id="repaintCount">0</div>
+            </div>
+            <div class="metric">
+                <div class="label">📊 FPS (Bad)</div>
+                <div class="value bad-val" id="fpsBad">60</div>
+            </div>
+            <div class="metric">
+                <div class="label">📊 FPS (Good)</div>
+                <div class="value good-val" id="fpsGood">60</div>
+            </div>
+            <div class="metric">
+                <div class="label">📐 CLS</div>
+                <div class="value neutral-val" id="clsScore">0.00</div>
+            </div>
+            <div class="metric">
+                <div class="label">⏱️ LCP (ms)</div>
+                <div class="value neutral-val" id="lcpScore">0</div>
+            </div>
+        </section>
+
+        <!-- ============================================================
+        COLUMNS
+        ============================================================ -->
+        <div class="columns">
+
+            <!-- =========================================================
+            BAD COLUMN
+            ========================================================= -->
+            <section class="column column-bad">
+                <div class="col-header">
+                    ❌ Bad Practices
+                    <span class="badge">Avoid</span>
+                </div>
+
+                <!-- CARD 1: LAYOUT — FLOAT -->
+                <div class="card card-bad">
+                    <div class="card-title">Layout: <code>float</code> + fixed px</div>
+                    <div class="card-desc">
+                        Uses <code>float: left</code> with clearfix hacks. Fixed pixel widths — not responsive.
+                        Forces reflows when resizing.
+                    </div>
+                    <div class="float-container" id="badFloatContainer">
+                        <div class="float-item">1</div>
+                        <div class="float-item">2</div>
+                        <div class="float-item">3</div>
+                        <div class="float-item">4</div>
+                    </div>
+                    <div class="tip">⚠️ <strong>Reflow trigger:</strong> float + fixed widths cause layout recalculations on resize.</div>
+                </div>
+
+                <!-- CARD 2: ANIMATION — left/top (reflow) -->
+                <div class="card card-bad">
+                    <div class="card-title">Animation: <code>left</code> / <code>top</code></div>
+                    <div class="card-desc">
+                        Animating <code>left</code> triggers <strong>reflow</strong> on every frame.
+                        Uses <code>setInterval</code> — not synced with screen refresh.
+                    </div>
+                    <div class="demo-area">
+                        <div class="anim-box anim-box-bad" id="badAnimBox">BAD</div>
+                        <button class="btn btn-bad" onclick="toggleBadAnim()">▶ Play</button>
+                        <span style="font-size:0.7rem;color:var(--text-dim);" id="badAnimStatus">stopped</span>
+                    </div>
+                    <div class="tip">⚠️ <strong>Cost:</strong> triggers Layout → Paint → Composite on every frame. ~30-40 FPS.</div>
+                </div>
+
+                <!-- CARD 3: HOVER — width/height (reflow) -->
+                <div class="card card-bad">
+                    <div class="card-title">Hover: <code>width</code> + <code>height</code></div>
+                    <div class="card-desc">
+                        Changing <code>width</code> and <code>height</code> on hover triggers <strong>reflow</strong>.
+                        Causes layout shift for surrounding elements.
+                    </div>
+                    <div class="demo-area">
+                        <div class="box hover-bad">HOVER</div>
+                    </div>
+                    <div class="tip">⚠️ <strong>Cost:</strong> reflows the entire subtree. Surrounding elements shift.</div>
+                </div>
+
+                <!-- CARD 4: DISPLAY vs VISIBILITY -->
+                <div class="card card-bad">
+                    <div class="card-title">Toggle: <code>display: none</code></div>
+                    <div class="card-desc">
+                        Using <code>display: none</code> removes the element from layout — triggers <strong>reflow</strong>
+                        and shifts other elements.
+                    </div>
+                    <div class="demo-area">
+                        <div class="toggle-box toggle-bad" id="badToggle">VISIBLE</div>
+                        <button class="btn btn-bad" onclick="toggleBadDisplay()">Toggle</button>
+                    </div>
+                    <div class="tip">⚠️ <strong>Cost:</strong> full reflow. Surrounding elements move.</div>
+                </div>
+
+                <!-- CARD 5: IMAGE — no optimization -->
+                <div class="card card-bad">
+                    <div class="card-title">Image: no lazy, no sizing</div>
+                    <div class="card-desc">
+                        No <code>width</code>/<code>height</code> attributes → <strong>CLS</strong>.
+                        No lazy loading → blocks rendering. Large file.
+                    </div>
+                    <div class="img-demo">
+                        <figure>
+                            <img class="img-bad"
+                            src="https://picsum.photos/seed/bad/400/300"
+                            alt="Bad image — no sizing"
+                            />
+                            <figcaption style="font-size:0.6rem;color:var(--text-dim);">No width/height → CLS</figcaption>
+                        </figure>
+                    </div>
+                    <div class="tip">⚠️ <strong>CLS:</strong> layout shifts as image loads. No lazy loading.</div>
+                </div>
+
+                <!-- CARD 6: SELECTOR PERFORMANCE -->
+                <div class="card card-bad">
+                    <div class="card-title">Selectors: deeply nested</div>
+                    <div class="card-desc">
+                        Overly specific, nested selectors. Hard to maintain. Uses <code>!important</code>.
+                    </div>
+                    <div class="selector-demo">
+                        <span class="bad-selector">
+                            .header .nav .nav-list .nav-item .nav-link .icon { ... }
+                        </span>
+                        <br />
+                        <span class="bad-selector">!important</span> used everywhere.
+                    </div>
+                    <div class="tip">⚠️ <strong>Cost:</strong> slower style recalculations. Hard to override.</div>
+                </div>
+
+            </section>
+
+            <!-- =========================================================
+            GOOD COLUMN
+            ========================================================= -->
+            <section class="column column-good">
+                <div class="col-header">
+                    ✅ Good Practices
+                    <span class="badge good-badge">Adopt</span>
+                </div>
+
+                <!-- CARD 1: LAYOUT — FLEXBOX -->
+                <div class="card card-good">
+                    <div class="card-title">Layout: <code>flexbox</code> + <code>gap</code></div>
+                    <div class="card-desc">
+                        Uses <code>display: flex</code> with <code>flex-wrap</code> and <code>gap</code>.
+                        Responsive — items wrap naturally. No clearfix hacks.
+                    </div>
+                    <div class="flex-container" id="goodFlexContainer">
+                        <div class="flex-item">1</div>
+                        <div class="flex-item">2</div>
+                        <div class="flex-item">3</div>
+                        <div class="flex-item">4</div>
+                    </div>
+                    <div class="tip">✅ <strong>Optimized:</strong> no reflows on resize. Responsive by default.</div>
+                </div>
+
+                <!-- CARD 2: ANIMATION — transform (composite) -->
+                <div class="card card-good">
+                    <div class="card-title">Animation: <code>transform</code></div>
+                    <div class="card-desc">
+                        Animating <code>transform</code> uses the <strong>compositor</strong> — no reflow, no repaint.
+                        Uses <code>requestAnimationFrame</code> — synced with screen refresh.
+                    </div>
+                    <div class="demo-area">
+                        <div class="anim-box anim-box-good" id="goodAnimBox">GOOD</div>
+                        <button class="btn btn-good" onclick="toggleGoodAnim()">▶ Play</button>
+                        <span style="font-size:0.7rem;color:var(--text-dim);" id="goodAnimStatus">stopped</span>
+                    </div>
+                    <div class="tip">✅ <strong>Cost:</strong> Composite only. ~60 FPS smooth.</div>
+                </div>
+
+                <!-- CARD 3: HOVER — transform (composite) -->
+                <div class="card card-good">
+                    <div class="card-title">Hover: <code>transform: scale()</code></div>
+                    <div class="card-desc">
+                        Using <code>transform: scale()</code> on hover triggers <strong>composite only</strong>.
+                        No layout shift. Smooth 60fps.
+                    </div>
+                    <div class="demo-area">
+                        <div class="box hover-good">HOVER</div>
+                    </div>
+                    <div class="tip">✅ <strong>Cost:</strong> Composite only. No reflow. No layout shift.</div>
+                </div>
+
+                <!-- CARD 4: DISPLAY vs VISIBILITY -->
+                <div class="card card-good">
+                    <div class="card-title">Toggle: <code>visibility: hidden</code></div>
+                    <div class="card-desc">
+                        Using <code>visibility: hidden</code> preserves layout — no reflow.
+                        Element is invisible but space is maintained.
+                    </div>
+                    <div class="demo-area">
+                        <div class="toggle-box toggle-good" id="goodToggle">VISIBLE</div>
+                        <button class="btn btn-good" onclick="toggleGoodVisibility()">Toggle</button>
+                    </div>
+                    <div class="tip">✅ <strong>Cost:</strong> Repaint only. No layout shift.</div>
+                </div>
+
+                <!-- CARD 5: IMAGE — optimized -->
+                <div class="card card-good">
+                    <div class="card-title">Image: lazy + responsive + sized</div>
+                    <div class="card-desc">
+                        <code>width</code>/<code>height</code> attributes prevent CLS.
+                        <code>loading="lazy"</code> defers off-screen images.
+                        <code>srcset</code> serves responsive sizes.
+                    </div>
+                    <div class="img-demo">
+                        <figure>
+                            <img class="img-good"
+                            src="https://picsum.photos/seed/good/400/300"
+                            alt="Good image — optimized"
+                            width="400"
+                            height="225"
+                            loading="lazy"
+                            srcset="https://picsum.photos/seed/good/300/169 300w,
+                            https://picsum.photos/seed/good/600/338 600w,
+                            https://picsum.photos/seed/good/900/506 900w"
+                            sizes="(max-width: 480px) 100vw, 50vw"
+                            />
+                            <figcaption style="font-size:0.6rem;color:var(--text-dim);">Width/height → no CLS. Lazy + srcset.</figcaption>
+                        </figure>
+                    </div>
+                    <div class="tip">✅ <strong>CLS:</strong> 0.00. Image loads without shifting layout.</div>
+                </div>
+
+                <!-- CARD 6: SELECTOR PERFORMANCE -->
+                <div class="card card-good">
+                    <div class="card-title">Selectors: flat + BEM</div>
+                    <div class="card-desc">
+                        Flat, specific selectors. Uses BEM methodology. CSS custom properties (variables) for theming.
+                        No <code>!important</code>.
+                    </div>
+                    <div class="selector-demo">
+                        <span class="good-selector">
+                            .card__title { color: var(--text); }
+                        </span>
+                        <br />
+                        <span class="good-selector">
+                            .card__title--large { font-size: 1.2rem; }
+                        </span>
+                        <br />
+                        <span style="color:var(--accent);">:root { --bad: #e74c3c; }</span>
+                    </div>
+                    <div class="tip">✅ <strong>Optimized:</strong> fast style calculations. Maintainable, scalable.</div>
+                </div>
+
+            </section>
+
+        </div><!-- /columns -->
+
+        <!-- ============================================================
+        FOOTER
+        ============================================================ -->
+        <footer style="text-align:center;padding:20px 0;color:var(--text-dim);font-size:0.75rem;border-top:1px solid var(--border);margin-top:12px;">
+            Built to demonstrate CSS &amp; Browser Rendering fundamentals.
+            Open DevTools → Performance tab to see the difference.
+        </footer>
+
+    </div><!-- /app -->
+
+    <!-- ============================================================
+    JAVASCRIPT
+    ============================================================ -->
+    <script>
+        /* =============================================================
+        STATE
+        ============================================================= */
+        const state = {
+            badAnimRunning: false,
+            goodAnimRunning: false,
+            badAnimId: null,
+            goodAnimId: null,
+            badPos: 0,
+            goodPos: 0,
+            reflowCount: 0,
+            repaintCount: 0,
+            fpsBad: 60,
+            fpsGood: 60,
+            badToggleVisible: true,
+            goodToggleVisible: true,
+            theme: 'dark',
+            clsAccumulator: 0,
+            lcpValue: 0,
+        };
+
+        /* =============================================================
+        DOM REFS
+        ============================================================= */
+        const $ = (id) => document.getElementById(id);
+        const badAnimBox = $('badAnimBox');
+        const goodAnimBox = $('goodAnimBox');
+        const badAnimStatus = $('badAnimStatus');
+        const goodAnimStatus = $('goodAnimStatus');
+        const badToggle = $('badToggle');
+        const goodToggle = $('goodToggle');
+        const reflowEl = $('reflowCount');
+        const repaintEl = $('repaintCount');
+        const fpsBadEl = $('fpsBad');
+        const fpsGoodEl = $('fpsGood');
+        const clsEl = $('clsScore');
+        const lcpEl = $('lcpScore');
+
+        /* =============================================================
+        PERFORMANCE OBSERVERS
+        ============================================================= */
+
+        // --- Count Reflows & Repaints via PerformanceObserver ---
+        if (window.PerformanceObserver) {
+            const observer = new PerformanceObserver((list) => {
+                for (const entry of list.getEntries()) {
+                    if (entry.entryType === 'layout-shift') {
+                        state.clsAccumulator += entry.value;
+                        clsEl.textContent = state.clsAccumulator.toFixed(2);
+                    }
+                    if (entry.entryType === 'largest-contentful-paint') {
+                        state.lcpValue = Math.round(entry.startTime);
+                        lcpEl.textContent = state.lcpValue;
+                    }
+                    // Count style/layout recalcs (approximate)
+                    if (entry.entryType === 'paint') {
+                        state.repaintCount++;
+                        repaintEl.textContent = state.repaintCount;
+                    }
+                }
+            });
+            observer.observe({ entryTypes: ['layout-shift', 'largest-contentful-paint', 'paint'] });
+        }
+
+        // --- Manual reflow detection (hack for demo) ---
+        const origGetComputedStyle = window.getComputedStyle;
+        window.getComputedStyle = function(el) {
+            state.reflowCount++;
+            reflowEl.textContent = state.reflowCount;
+            return origGetComputedStyle.call(this, el);
+        };
+
+        // --- FPS tracking ---
+        let frameCountBad = 0;
+        let frameCountGood = 0;
+        let lastFpsUpdate = performance.now();
+
+        function trackFPS() {
+            const now = performance.now();
+            const delta = (now - lastFpsUpdate) / 1000;
+            if (delta >= 1) {
+                // Only update if animations are running
+                if (state.badAnimRunning) {
+                    state.fpsBad = Math.round(frameCountBad / delta);
+                    fpsBadEl.textContent = state.fpsBad;
+                } else {
+                    fpsBadEl.textContent = '—';
+                }
+                if (state.goodAnimRunning) {
+                    state.fpsGood = Math.round(frameCountGood / delta);
+                    fpsGoodEl.textContent = state.fpsGood;
+                } else {
+                    fpsGoodEl.textContent = '—';
+                }
+                frameCountBad = 0;
+                frameCountGood = 0;
+                lastFpsUpdate = now;
+            }
+            requestAnimationFrame(trackFPS);
+        }
+        requestAnimationFrame(trackFPS);
+
+        /* =============================================================
+        BAD ANIMATION — left (reflow)
+        ============================================================= */
+        function toggleBadAnim() {
+            state.badAnimRunning = !state.badAnimRunning;
+            if (state.badAnimRunning) {
+                badAnimStatus.textContent = 'running 🔴';
+                badAnimStatus.style.color = 'var(--bad)';
+                runBadAnim();
+            } else {
+                badAnimStatus.textContent = 'stopped';
+                badAnimStatus.style.color = 'var(--text-dim)';
+                if (state.badAnimId) {
+                    cancelAnimationFrame(state.badAnimId);
+                    state.badAnimId = null;
+                }
+            }
+        }
+
+        function runBadAnim() {
+            if (!state.badAnimRunning) return;
+            state.badPos += 2;
+            if (state.badPos > 200) state.badPos = 0;
+            // BAD: setting left triggers reflow
+            badAnimBox.style.left = state.badPos + 'px';
+            frameCountBad++;
+            state.badAnimId = requestAnimationFrame(runBadAnim);
+        }
+
+        /* =============================================================
+        GOOD ANIMATION — transform (composite)
+        ============================================================= */
+        function toggleGoodAnim() {
+            state.goodAnimRunning = !state.goodAnimRunning;
+            if (state.goodAnimRunning) {
+                goodAnimStatus.textContent = 'running 🟢';
+                goodAnimStatus.style.color = 'var(--good)';
+                runGoodAnim();
+            } else {
+                goodAnimStatus.textContent = 'stopped';
+                goodAnimStatus.style.color = 'var(--text-dim)';
+                if (state.goodAnimId) {
+                    cancelAnimationFrame(state.goodAnimId);
+                    state.goodAnimId = null;
+                }
+            }
+        }
+
+        function runGoodAnim() {
+            if (!state.goodAnimRunning) return;
+            state.goodPos += 2;
+            if (state.goodPos > 200) state.goodPos = 0;
+            // GOOD: transform triggers composite only
+            goodAnimBox.style.transform = 'translateX(' + state.goodPos + 'px)';
+            frameCountGood++;
+            state.goodAnimId = requestAnimationFrame(runGoodAnim);
+        }
+
+        /* =============================================================
+        TOGGLE: display:none (BAD) vs visibility:hidden (GOOD)
+        ============================================================= */
+        function toggleBadDisplay() {
+            state.badToggleVisible = !state.badToggleVisible;
+            if (state.badToggleVisible) {
+                badToggle.classList.remove('hidden-display');
+                badToggle.textContent = 'VISIBLE';
+            } else {
+                badToggle.classList.add('hidden-display');
+                badToggle.textContent = 'HIDDEN';
+            }
+            // Force a reflow count increment for demo
+            state.reflowCount++;
+            reflowEl.textContent = state.reflowCount;
+        }
+
+        function toggleGoodVisibility() {
+            state.goodToggleVisible = !state.goodToggleVisible;
+            if (state.goodToggleVisible) {
+                goodToggle.classList.remove('hidden-vis');
+                goodToggle.textContent = 'VISIBLE';
+            } else {
+                goodToggle.classList.add('hidden-vis');
+                goodToggle.textContent = 'HIDDEN';
+            }
+            // visibility:hidden triggers repaint, not reflow
+            state.repaintCount++;
+            repaintEl.textContent = state.repaintCount;
+        }
+
+        /* =============================================================
+        RESET
+        ============================================================= */
+        function resetAll() {
+            // Stop animations
+            state.badAnimRunning = false;
+            state.goodAnimRunning = false;
+            if (state.badAnimId) { cancelAnimationFrame(state.badAnimId);
+                state.badAnimId = null; }
+            if (state.goodAnimId) { cancelAnimationFrame(state.goodAnimId);
+                state.goodAnimId = null; }
+            badAnimStatus.textContent = 'stopped';
+            badAnimStatus.style.color = 'var(--text-dim)';
+            goodAnimStatus.textContent = 'stopped';
+            goodAnimStatus.style.color = 'var(--text-dim)';
+            badAnimBox.style.left = '0px';
+            goodAnimBox.style.transform = 'translateX(0px)';
+            state.badPos = 0;
+            state.goodPos = 0;
+
+            // Reset toggles
+            state.badToggleVisible = true;
+            state.goodToggleVisible = true;
+            badToggle.classList.remove('hidden-display');
+            badToggle.textContent = 'VISIBLE';
+            goodToggle.classList.remove('hidden-vis');
+            goodToggle.textContent = 'VISIBLE';
+
+            // Reset metrics
+            state.reflowCount = 0;
+            state.repaintCount = 0;
+            state.fpsBad = 60;
+            state.fpsGood = 60;
+            state.clsAccumulator = 0;
+            state.lcpValue = 0;
+            reflowEl.textContent = '0';
+            repaintEl.textContent = '0';
+            fpsBadEl.textContent = '60';
+            fpsGoodEl.textContent = '60';
+            clsEl.textContent = '0.00';
+            lcpEl.textContent = '0';
+        }
+
+        /* =============================================================
+        THEME TOGGLE (light/dark)
+        ============================================================= */
+        function toggleTheme() {
+            const root = document.documentElement;
+            if (state.theme === 'dark') {
+                state.theme = 'light';
+                root.style.setProperty('--bg', '#f0f2f5');
+                root.style.setProperty('--surface', '#ffffff');
+                root.style.setProperty('--surface-hover', '#e8eaed');
+                root.style.setProperty('--border', '#d0d4dc');
+                root.style.setProperty('--text', '#1a1d27');
+                root.style.setProperty('--text-dim', '#5a6478');
+                root.style.setProperty('--shadow', '0 8px 32px rgba(0,0,0,0.12)');
+            } else {
+                state.theme = 'dark';
+                root.style.setProperty('--bg', '#0f1117');
+                root.style.setProperty('--surface', '#1a1d27');
+                root.style.setProperty('--surface-hover', '#252a38');
+                root.style.setProperty('--border', '#2d3348');
+                root.style.setProperty('--text', '#e8edf5');
+                root.style.setProperty('--text-dim', '#8892a8');
+                root.style.setProperty('--shadow', '0 8px 32px rgba(0,0,0,0.5)');
+            }
+        }
+
+        /* =============================================================
+        INIT
+        ============================================================= */
+        console.log('🚀 Performance Playground loaded.');
+        console.log('📊 Watch metrics as you interact with the page.');
+        console.log('🔴 Bad column triggers reflows. 🟢 Good column uses composites.');
+    </script>
+
+</body>
+</html>
